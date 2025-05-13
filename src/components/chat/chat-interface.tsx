@@ -7,12 +7,11 @@ import { Button, type ButtonProps } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Send, Download, Loader2, CheckCircle, XCircle, Wand2, ListChecks } from 'lucide-react';
-import { getGeneratedAndValidatedBPMNXml, getRefinedInstructions } from './actions';
+import { Send, Download, Loader2, CheckCircle, XCircle, Wand2, ListChecks, ShieldAlert, FileCheck2 } from 'lucide-react';
+import { getGeneratedAndValidatedBPMNXml, getRefinedInstructions, getCorrectedAndValidatedBPMNXml } from './actions';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
-// import BpmnViewer from '@/components/bpmn/bpmn-viewer'; // Viewer removed
 import type { ValidateBPMNXmlOutput } from '@/ai/flows/validate-bpmn-xml-flow';
 import { examplePrompts, type BpmnExamplePrompt } from '@/lib/bpmn-examples';
 import {
@@ -30,6 +29,7 @@ interface ActionButton {
   variant?: ButtonProps['variant'];
   Icon?: React.ElementType;
   disabled?: boolean;
+  tooltip?: string;
 }
 interface Message {
   id: string;
@@ -43,7 +43,7 @@ interface Message {
   confirmationProcessed?: boolean; 
   originalUserInput?: string; 
   actionButtons?: ActionButton[];
-  // showViewer?: boolean; // Removed viewer visibility state
+  isCorrectionAttempt?: boolean;
 }
 
 export default function ChatInterface() {
@@ -57,6 +57,7 @@ export default function ChatInterface() {
   const [inputValue, setInputValue] = useState('');
   const [isLoadingRefinement, setIsLoadingRefinement] = useState(false);
   const [isLoadingBpmn, setIsLoadingBpmn] = useState(false);
+  const [isLoadingCorrection, setIsLoadingCorrection] = useState(false);
   const [editingRefinedText, setEditingRefinedText] = useState<string | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
@@ -76,25 +77,51 @@ export default function ChatInterface() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value);
   };
+  
+  const generateActionButtonsForXml = (messageId: string, xmlContent: string, validation: ValidateBPMNXmlOutput | undefined): ActionButton[] => {
+    const buttons: ActionButton[] = [
+      { id: `download-${messageId}`, label: 'Télécharger XML', onClick: () => handleDownloadSpecificXML(xmlContent), Icon: Download, variant: 'outline', tooltip: 'Télécharger ce XML BPMN' },
+    ];
+    if (validation && !validation.isValid) {
+      buttons.push({ 
+        id: `correct-${messageId}`, 
+        label: 'Tenter Correction', 
+        onClick: () => handleAttemptCorrection(messageId, xmlContent, validation.issues || []), 
+        Icon: ShieldAlert, 
+        variant: 'destructive',
+        tooltip: "Demander à l'IA de corriger les erreurs de validation"
+      });
+    }
+    return buttons;
+  };
 
-  // toggleViewerVisibility removed as viewer is removed
 
   const processMessageForBPMN = useCallback(async (messageId: string, instructions: string) => {
     setIsLoadingBpmn(true);
     setMessages(prev => prev.map(m => m.id === messageId ? { ...m, confirmationProcessed: true, actionButtons: undefined } : m));
 
+    const generatingMessage: Message = {
+      id: Date.now().toString() + '-ai-generating',
+      text: "Génération et validation du XML BPMN en cours...",
+      sender: 'ai',
+    };
+    setMessages(prev => [...prev, generatingMessage]);
+
     try {
       const result = await getGeneratedAndValidatedBPMNXml(instructions);
+      setMessages(prev => prev.filter(m => m.id !== generatingMessage.id)); // Remove generating message
+
       if (result.error) throw new Error(result.error);
 
       if (result.bpmnXml) {
+        const newXmlMessageId = Date.now().toString() + '-ai-xml';
         const newAIMessage: Message = {
-          id: Date.now().toString() + '-ai-xml',
+          id: newXmlMessageId,
           text: result.bpmnXml,
           sender: 'ai',
           isXML: true,
           validationResult: result.validation,
-          // showViewer: true, // Removed
+          actionButtons: generateActionButtonsForXml(newXmlMessageId, result.bpmnXml, result.validation),
         };
         setMessages(prev => [...prev, newAIMessage]);
       } else {
@@ -106,6 +133,7 @@ export default function ChatInterface() {
         setMessages(prev => [...prev, noXmlMessage]);
       }
     } catch (error) {
+      setMessages(prev => prev.filter(m => m.id !== generatingMessage.id)); // Remove generating message
       const errorMessage = error instanceof Error ? error.message : "Une erreur inconnue est survenue lors de la génération ou validation BPMN.";
       const newAIErrorMessage: Message = {
         id: Date.now().toString() + '-ai-error-bpmn',
@@ -116,6 +144,64 @@ export default function ChatInterface() {
       toast({ title: "Erreur de Génération/Validation BPMN", description: errorMessage, variant: "destructive" });
     } finally {
       setIsLoadingBpmn(false);
+    }
+  }, [toast]);
+
+  const handleAttemptCorrection = useCallback(async (messageId: string, originalXml: string, issues: string[]) => {
+    setIsLoadingCorrection(true);
+    setMessages(prev => prev.map(m => m.id === messageId ? { ...m, actionButtons: m.actionButtons?.map(b => b.id === `correct-${messageId}` ? {...b, disabled: true} : b) } : m));
+    
+    const correctingMessage: Message = {
+      id: Date.now().toString() + '-ai-correcting',
+      text: "Tentative de correction du XML BPMN en cours...",
+      sender: 'ai',
+      isCorrectionAttempt: true,
+    };
+    setMessages(prev => [...prev, correctingMessage]);
+
+    try {
+      const result = await getCorrectedAndValidatedBPMNXml(originalXml, issues);
+      setMessages(prev => prev.filter(m => m.id !== correctingMessage.id)); 
+
+      if (result.error) throw new Error(result.error);
+
+      if (result.correctedBpmnXml) {
+        const correctedXmlMessageId = Date.now().toString() + '-ai-corrected-xml';
+        const newCorrectedMessage: Message = {
+          id: correctedXmlMessageId,
+          text: `Voici une tentative de correction basée sur les problèmes précédents :\n\n${result.correctedBpmnXml}`,
+          sender: 'ai',
+          isXML: true,
+          validationResult: result.validation,
+          actionButtons: generateActionButtonsForXml(correctedXmlMessageId, result.correctedBpmnXml, result.validation),
+          isCorrectionAttempt: true,
+        };
+        setMessages(prev => [...prev, newCorrectedMessage]);
+         toast({ title: "Correction Tentée", description: "L'IA a tenté de corriger le XML. Veuillez vérifier le nouveau résultat.", variant: "default" });
+      } else {
+         const noCorrectionMessage: Message = {
+          id: Date.now().toString() + '-ai-no-correction',
+          text: "L'IA n'a pas pu fournir de correction pour le XML BPMN.",
+          sender: 'ai',
+          isCorrectionAttempt: true,
+        };
+        setMessages(prev => [...prev, noCorrectionMessage]);
+      }
+
+    } catch (error) {
+      setMessages(prev => prev.filter(m => m.id !== correctingMessage.id));
+      const errorMessage = error instanceof Error ? error.message : "Une erreur inconnue est survenue lors de la tentative de correction.";
+      const newAIErrorCorrectionMessage: Message = {
+        id: Date.now().toString() + '-ai-error-correction',
+        text: `Erreur lors de la tentative de correction BPMN : ${errorMessage}`,
+        sender: 'ai',
+        isCorrectionAttempt: true,
+      };
+      setMessages(prev => [...prev, newAIErrorCorrectionMessage]);
+      toast({ title: "Erreur de Correction BPMN", description: errorMessage, variant: "destructive" });
+    } finally {
+      setIsLoadingCorrection(false);
+       setMessages(prev => prev.map(m => m.id === messageId ? { ...m, actionButtons: m.actionButtons?.map(b => b.id === `correct-${messageId}` ? {...b, disabled: false} : b) } : m));
     }
   }, [toast]);
 
@@ -143,9 +229,9 @@ export default function ChatInterface() {
         confirmationProcessed: false,
         originalUserInput: messages.find(m => m.id === editingMessageId)?.originalUserInput || "N/A",
         actionButtons: [
-          { id: 'generate-' + newRefinedMessageId, label: 'Générer BPMN', onClick: () => processMessageForBPMN(newRefinedMessageId, editingRefinedText!), Icon: CheckCircle, variant: 'default' },
-          { id: 'edit-' + newRefinedMessageId, label: 'Modifier', onClick: () => handleEditInstructions(newRefinedMessageId, editingRefinedText!), Icon: Wand2, variant: 'outline' },
-          { id: 'cancel-' + newRefinedMessageId, label: 'Annuler', onClick: () => setMessages(prev => prev.map(m => m.id === newRefinedMessageId ? { ...m, confirmationProcessed: true, actionButtons: undefined, text: "Génération annulée pour ces instructions modifiées." } : m)), Icon: XCircle, variant: 'ghost' },
+          { id: 'generate-' + newRefinedMessageId, label: 'Générer BPMN', onClick: () => processMessageForBPMN(newRefinedMessageId, editingRefinedText!), Icon: FileCheck2, variant: 'default', tooltip: "Générer le XML BPMN avec ces instructions" },
+          { id: 'edit-' + newRefinedMessageId, label: 'Modifier', onClick: () => handleEditInstructions(newRefinedMessageId, editingRefinedText!), Icon: Wand2, variant: 'outline', tooltip: "Modifier à nouveau ces instructions" },
+          { id: 'cancel-' + newRefinedMessageId, label: 'Annuler', onClick: () => setMessages(prev => prev.map(m => m.id === newRefinedMessageId ? { ...m, confirmationProcessed: true, actionButtons: undefined, text: "Génération annulée pour ces instructions modifiées." } : m)), Icon: XCircle, variant: 'ghost', tooltip: "Annuler cette étape de génération" },
         ]
       };
       setMessages(prev => [...prev, editedMarkerMessage, newRefinedMessage]);
@@ -159,7 +245,7 @@ export default function ChatInterface() {
     
     const currentInput = typeof event === 'string' ? event : inputValue;
 
-    if (currentInput.trim() === '' || isLoadingRefinement || isLoadingBpmn) {
+    if (currentInput.trim() === '' || isLoadingRefinement || isLoadingBpmn || isLoadingCorrection) {
         if(currentInput.trim() === '') toast({ title: "Entrée vide", description: "Veuillez entrer une description pour votre processus.", variant: "destructive" });
         return;
     }
@@ -179,8 +265,17 @@ export default function ChatInterface() {
     if (typeof event !== 'string') setInputValue('');
     setIsLoadingRefinement(true);
 
+    const refiningMessage: Message = {
+      id: Date.now().toString() + '-ai-refining',
+      text: "Raffinement de votre description en cours...",
+      sender: 'ai',
+    };
+    setMessages(prev => [...prev, refiningMessage]);
+
     try {
       const result = await getRefinedInstructions(rawUserInput);
+      setMessages(prev => prev.filter(m => m.id !== refiningMessage.id)); 
+
       if (result.error) throw new Error(result.error);
 
       if (result.refinedInstructions) {
@@ -195,9 +290,9 @@ export default function ChatInterface() {
           confirmationProcessed: false,
           originalUserInput: rawUserInput,
           actionButtons: [
-            { id: 'generate-' + refinedMessageId, label: 'Générer BPMN', onClick: () => processMessageForBPMN(refinedMessageId, result.refinedInstructions!), Icon: CheckCircle, variant: 'default' },
-            { id: 'edit-' + refinedMessageId, label: 'Modifier', onClick: () => handleEditInstructions(refinedMessageId, result.refinedInstructions!), Icon: Wand2, variant: 'outline' },
-            { id: 'cancel-' + refinedMessageId, label: 'Annuler', onClick: () => setMessages(prev => prev.map(m => m.id === refinedMessageId ? { ...m, confirmationProcessed: true, actionButtons: undefined, text: "Génération annulée pour ces instructions." } : m)), Icon: XCircle, variant: 'ghost' },
+            { id: 'generate-' + refinedMessageId, label: 'Générer BPMN', onClick: () => processMessageForBPMN(refinedMessageId, result.refinedInstructions!), Icon: FileCheck2, variant: 'default', tooltip: "Générer le XML BPMN avec ces instructions" },
+            { id: 'edit-' + refinedMessageId, label: 'Modifier', onClick: () => handleEditInstructions(refinedMessageId, result.refinedInstructions!), Icon: Wand2, variant: 'outline', tooltip: "Modifier ces instructions avant génération" },
+            { id: 'cancel-' + refinedMessageId, label: 'Annuler', onClick: () => setMessages(prev => prev.map(m => m.id === refinedMessageId ? { ...m, confirmationProcessed: true, actionButtons: undefined, text: "Génération annulée pour ces instructions." } : m)), Icon: XCircle, variant: 'ghost', tooltip: "Annuler cette étape de génération" },
           ]
         };
         setMessages(prev => [...prev, newAIRefinedMessage]);
@@ -205,6 +300,7 @@ export default function ChatInterface() {
         throw new Error("L'IA n'a pas pu raffiner les instructions. Vérifiez le prompt de raffinement ou réessayez.");
       }
     } catch (error) {
+      setMessages(prev => prev.filter(m => m.id !== refiningMessage.id)); 
       const errorMessage = error instanceof Error ? error.message : "Une erreur inconnue est survenue lors du raffinement.";
       const newAIErrorMessage: Message = {
         id: Date.now().toString() + '-ai-error-refine',
@@ -223,13 +319,12 @@ export default function ChatInterface() {
     toast({ title: "Exemple chargé", description: `"${example.title}" a été chargé dans le champ de saisie.` });
   };
 
-  const handleDownloadXML = () => {
-    const lastXmlMessage = messages.slice().reverse().find(msg => msg.isXML && msg.text);
-    if (!lastXmlMessage || !lastXmlMessage.text) {
-      toast({ title: "Aucun XML à télécharger", description: "Veuillez d'abord générer un XML BPMN.", variant: "destructive" });
+  const handleDownloadSpecificXML = (xmlContent: string) => {
+    if (!xmlContent) {
+      toast({ title: "Aucun XML à télécharger", description: "Le contenu XML est vide.", variant: "destructive" });
       return;
     }
-    const blob = new Blob([lastXmlMessage.text], { type: 'application/bpmn+xml;charset=utf-8' });
+    const blob = new Blob([xmlContent], { type: 'application/bpmn+xml;charset=utf-8' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `bpmn_model_${Date.now()}.bpmn`;
@@ -238,8 +333,17 @@ export default function ChatInterface() {
     document.body.removeChild(link);
     toast({ title: "Téléchargement réussi", description: "Fichier BPMN (.bpmn) téléchargé." });
   };
+
+  const handleDownloadLastXML = () => {
+    const lastXmlMessage = messages.slice().reverse().find(msg => msg.isXML && msg.text);
+    if (!lastXmlMessage || !lastXmlMessage.text) {
+      toast({ title: "Aucun XML à télécharger", description: "Veuillez d'abord générer un XML BPMN.", variant: "destructive" });
+      return;
+    }
+    handleDownloadSpecificXML(lastXmlMessage.text);
+  };
   
-  const currentLoading = isLoadingRefinement || isLoadingBpmn;
+  const currentLoading = isLoadingRefinement || isLoadingBpmn || isLoadingCorrection;
 
   return (
     <div className="flex flex-col flex-grow bg-card border rounded-lg shadow-sm overflow-hidden">
@@ -262,7 +366,7 @@ export default function ChatInterface() {
               <div
                 className={cn(
                   'p-3 rounded-xl shadow w-full',
-                  msg.isXML ? 'bg-gray-800 dark:bg-gray-900 text-gray-100' : // Custom style for XML block
+                  msg.isXML ? 'bg-gray-800 dark:bg-gray-900 text-gray-100' : 
                   msg.isRefinement ? 'bg-accent/10 border border-accent/30 text-foreground' :
                   msg.sender === 'user'
                     ? 'bg-primary text-primary-foreground rounded-br-none'
@@ -272,39 +376,40 @@ export default function ChatInterface() {
                 {msg.isXML && msg.text && (
                   <>
                     <div className="flex justify-between items-center mb-2">
-                      <h4 className="font-semibold text-sm text-gray-200">Résultat de la Génération BPMN</h4>
-                      {/* Button to toggle viewer was here, now removed */}
+                      <h4 className="font-semibold text-sm text-gray-200">
+                        {msg.isCorrectionAttempt ? "Tentative de Correction BPMN" : "Résultat de la Génération BPMN"}
+                      </h4>
                     </div>
-                    {/* BpmnViewer component removed */}
                     <details className="max-h-64 overflow-y-auto">
-                      <summary className="cursor-pointer text-xs text-gray-400 hover:text-gray-200">Voir/Cacher XML Généré</summary>
-                      <pre className="mt-1 text-xs whitespace-pre-wrap font-mono bg-transparent p-0 m-0"><code className="language-xml">{msg.text}</code></pre>
+                      <summary className="cursor-pointer text-xs text-gray-400 hover:text-gray-200">Voir/Cacher XML {msg.isCorrectionAttempt ? "Corrigé" : "Généré"}</summary>
+                      <pre className="mt-1 text-xs whitespace-pre-wrap font-mono bg-transparent p-0 m-0"><code className="language-xml">{msg.isCorrectionAttempt ? msg.text.substring(msg.text.indexOf('<?xml')) : msg.text}</code></pre>
                     </details>
                     {msg.validationResult && (
                       <div className={cn(
                         "mt-3 pt-3 border-t",
-                        msg.validationResult.isValid ? "border-green-700/50" : "border-red-700/50" // Darker borders for contrast
+                        msg.validationResult.isValid ? "border-green-700/50" : "border-red-700/50"
                       )}>
                         <h5 className={cn(
-                          "text-sm font-semibold mb-1",
+                          "text-sm font-semibold mb-1 flex items-center",
                           msg.validationResult.isValid ? "text-green-400" : "text-red-400"
                         )}>
+                          {msg.validationResult.isValid ? <CheckCircle className="mr-2 h-4 w-4" /> : <XCircle className="mr-2 h-4 w-4" />}
                           Résultat Validation: {msg.validationResult.isValid ? 
-                            <span className="text-green-400">Valide</span> : 
-                            <span className="text-red-400">Invalide</span>
+                            <span className="text-green-400 ml-1">Valide</span> : 
+                            <span className="text-red-400 ml-1">Invalide</span>
                           }
                         </h5>
                         {msg.validationResult.summary && (
                              <p className="text-xs text-gray-400 mb-1 italic">{msg.validationResult.summary}</p>
                         )}
                         {msg.validationResult.issues && msg.validationResult.issues.length > 0 ? (
-                          <ul className="list-disc list-inside text-xs space-y-0.5 text-gray-300">
+                          <ul className="list-disc list-inside text-xs space-y-0.5 text-gray-300 max-h-40 overflow-y-auto">
                             {msg.validationResult.issues.map((issue, index) => (
                               <li key={index} 
                                 className={cn(
                                   issue.toLowerCase().includes("error:") ? "text-red-400" : 
                                   issue.toLowerCase().includes("warning:") ? "text-yellow-400" : 
-                                  "text-gray-300" // Default for info or unspecified
+                                  "text-gray-300"
                                 )}
                               >
                                 {issue}
@@ -316,13 +421,23 @@ export default function ChatInterface() {
                         )}
                       </div>
                     )}
+                    {msg.actionButtons && msg.actionButtons.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-gray-700/50 flex flex-wrap gap-2">
+                        {msg.actionButtons.map(btn => (
+                          <Button key={btn.id} variant={btn.variant || 'default'} size="sm" onClick={btn.onClick} disabled={currentLoading || btn.disabled} title={btn.tooltip}>
+                            {btn.Icon && <btn.Icon className="mr-2 h-4 w-4" />}
+                            {btn.label}
+                          </Button>
+                        ))}
+                      </div>
+                    )}
                   </>
                 )}
                 {!msg.isXML && <p className="text-sm whitespace-pre-wrap">{msg.text}</p>}
                 {msg.requiresConfirmation && !msg.confirmationProcessed && msg.actionButtons && (
                   <div className="mt-3 pt-3 border-t border-accent/20 flex flex-wrap gap-2">
                     {msg.actionButtons.map(btn => (
-                       <Button key={btn.id} variant={btn.variant || 'default'} size="sm" onClick={btn.onClick} disabled={currentLoading || btn.disabled}>
+                       <Button key={btn.id} variant={btn.variant || 'default'} size="sm" onClick={btn.onClick} disabled={currentLoading || btn.disabled} title={btn.tooltip}>
                         {btn.Icon && <btn.Icon className="mr-2 h-4 w-4" />}
                         {btn.label}
                       </Button>
@@ -338,16 +453,16 @@ export default function ChatInterface() {
               )}
             </div>
           ))}
-          {(isLoadingRefinement || isLoadingBpmn) && (
+          {(isLoadingRefinement || isLoadingBpmn || isLoadingCorrection) && (
             <div className="flex items-center space-x-2 justify-start">
               <Avatar className="h-8 w-8 flex-shrink-0">
                 <AvatarImage src="https://picsum.photos/seed/ai-avatar/40/40" data-ai-hint="robot thinking" alt="AI Avatar" />
                 <AvatarFallback>AI</AvatarFallback>
               </Avatar>
-              <div className="p-3 rounded-xl shadow bg-muted text-muted-foreground rounded-bl-none">
+              <div className="p-3 rounded-xl shadow bg-muted text-muted-foreground rounded-bl-none flex items-center">
                 <Loader2 className="h-5 w-5 animate-spin" />
                  <span className="ml-2 text-sm">
-                  {isLoadingRefinement ? "Raffinement en cours..." : "Génération & Validation BPMN..."}
+                  {isLoadingRefinement ? "Raffinement en cours..." : isLoadingBpmn ? "Génération & Validation BPMN..." : "Tentative de correction..."}
                 </span>
               </div>
             </div>
@@ -371,7 +486,7 @@ export default function ChatInterface() {
         </div>
       )}
 
-      <form onSubmit={handleSendMessage} className="p-4 border-t bg-background">
+      <form onSubmit={e => handleSendMessage(e)} className="p-4 border-t bg-background">
         <div className="flex items-center space-x-2">
           <Input
             type="text"
@@ -390,7 +505,7 @@ export default function ChatInterface() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {examplePrompts.map((ex) => (
-                <DropdownMenuItem key={ex.id} onClick={() => handleLoadExample(ex)}>
+                <DropdownMenuItem key={ex.id} onClick={() => handleSendMessage(ex.prompt)}>
                   {ex.title}
                 </DropdownMenuItem>
               ))}
@@ -400,7 +515,7 @@ export default function ChatInterface() {
             {currentLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
             <span className="ml-2 hidden sm:inline">Envoyer</span>
           </Button>
-          <Button variant="outline" type="button" onClick={handleDownloadXML} disabled={!messages.some(m => m.isXML && m.text) || currentLoading || !!editingMessageId} aria-label="Télécharger XML BPMN">
+          <Button variant="outline" type="button" onClick={handleDownloadLastXML} disabled={!messages.some(m => m.isXML && m.text) || currentLoading || !!editingMessageId} aria-label="Télécharger dernier XML BPMN">
             <Download className="h-5 w-5" />
             <span className="ml-2 hidden sm:inline">BPMN</span>
           </Button>

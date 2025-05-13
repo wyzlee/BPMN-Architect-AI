@@ -12,7 +12,7 @@ import {
   SidebarMenuButton,
 } from '@/components/ui/sidebar';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Workflow, MessageSquareText, Settings, FileEdit, ShieldCheck } from 'lucide-react'; 
+import { Workflow, MessageSquareText, Settings, FileEdit, ShieldCheck, Construction } from 'lucide-react'; 
 import React from 'react';
 
 export default function AppSidebar() {
@@ -65,6 +65,14 @@ export default function AppSidebar() {
                 <SidebarMenuButton isActive={isLinkActive('/admin/validation-prompt')} tooltip={{children: "Éditeur Prompt Validation"}}>
                   <ShieldCheck className="h-4 w-4 text-sidebar-primary" />
                   <span className="group-data-[collapsible=icon]:hidden">Éditeur Prompt Validation</span>
+                </SidebarMenuButton>
+              </Link>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <Link href="/admin/correction-prompt" legacyBehavior passHref>
+                <SidebarMenuButton isActive={isLinkActive('/admin/correction-prompt')} tooltip={{children: "Éditeur Prompt Correction"}}>
+                  <Construction className="h-4 w-4 text-sidebar-primary" />
+                  <span className="group-data-[collapsible=icon]:hidden">Éditeur Prompt Correction</span>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>

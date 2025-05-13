@@ -3,6 +3,7 @@
 import { generateBPMNXml, type GenerateBPMNXmlInput, type GenerateBPMNXmlOutput } from '@/ai/flows/generate-bpmn-xml';
 import { refineUserInput, type RefineUserInputInput, type RefineUserInputOutput } from '@/ai/flows/refine-user-input-flow';
 import { validateBPMNXml, type ValidateBPMNXmlInput, type ValidateBPMNXmlOutput } from '@/ai/flows/validate-bpmn-xml-flow';
+import { correctBpmnXml, type CorrectBpmnXmlInput, type CorrectBpmnXmlOutput } from '@/ai/flows/correct-bpmn-xml-flow';
 
 interface RefinementResult {
   refinedInstructions: string | null;
@@ -74,6 +75,56 @@ export async function getGeneratedAndValidatedBPMNXml(refinedUserInput: string):
         bpmnXml: generatedXml, 
         validation: { isValid: false, issues: [`La validation a échoué: ${errorMessage}. Assurez-vous que le service Genkit est démarré et que le prompt de validation est configuré.`]}, 
         error: null // Error is about validation, not generation itself here
+    };
+  }
+}
+
+
+interface CorrectionResult {
+  correctedBpmnXml: string | null;
+  validation?: ValidateBPMNXmlOutput | null;
+  error: string | null;
+}
+
+export async function getCorrectedAndValidatedBPMNXml(originalBpmnXml: string, validationIssues: string[]): Promise<CorrectionResult> {
+  if (!originalBpmnXml.trim()) {
+    return { correctedBpmnXml: null, error: "Le XML BPMN original ne peut pas être vide pour la correction." };
+  }
+  if (!validationIssues || validationIssues.length === 0) {
+    return { correctedBpmnXml: originalBpmnXml, error: "Aucun problème de validation fourni pour la correction." };
+  }
+
+  let correctedXml: string | null = null;
+
+  try {
+    const correctionInput: CorrectBpmnXmlInput = { originalBpmnXml, validationIssues };
+    const correctionOutput: CorrectBpmnXmlOutput = await correctBpmnXml(correctionInput);
+
+    if (!correctionOutput || !correctionOutput.correctedBpmnXml) {
+      console.warn("AI BPMN correction flow returned an unexpected result or no corrected BPMN XML:", correctionOutput);
+      return { correctedBpmnXml: null, error: "L'IA de correction n'a pas retourné de XML BPMN corrigé. Veuillez vérifier le prompt de correction ou réessayer." };
+    }
+    correctedXml = correctionOutput.correctedBpmnXml;
+
+  } catch (error) {
+    console.error("Error correcting BPMN XML with AI flow:", error);
+    const errorMessage = error instanceof Error ? error.message : "Une erreur interne est survenue lors de la communication avec l'IA pour la correction BPMN.";
+    return { correctedBpmnXml: null, error: `Échec de la correction du XML BPMN par l'IA: ${errorMessage}. Assurez-vous que le service Genkit est démarré et que le prompt de correction est configuré.` };
+  }
+
+  // Re-validate the corrected XML
+  try {
+    const validationInput: ValidateBPMNXmlInput = { bpmnXml: correctedXml };
+    const validationResult: ValidateBPMNXmlOutput = await validateBPMNXml(validationInput);
+    return { correctedBpmnXml: correctedXml, validation: validationResult, error: null };
+
+  } catch (error) {
+    console.error("Error re-validating corrected BPMN XML with AI flow:", error);
+    const errorMessage = error instanceof Error ? error.message : "Une erreur interne est survenue lors de la nouvelle validation BPMN.";
+    return {
+      correctedBpmnXml: correctedXml,
+      validation: { isValid: false, issues: [`La nouvelle validation après correction a échoué: ${errorMessage}.`] },
+      error: null
     };
   }
 }
