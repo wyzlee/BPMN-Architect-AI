@@ -1,4 +1,4 @@
 import { config } from 'dotenv';
 config();
 
-import '@/ai/flows/suggest-bpmn-elements.ts';
+import '@/ai/flows/generate-bpmn-xml.ts';

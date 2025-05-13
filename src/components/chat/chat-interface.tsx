@@ -1,35 +1,34 @@
 "use client";
 
 import { useState, useRef, useEffect } from 'react';
+import type { FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Send, Download, Loader2 } from 'lucide-react';
-import { getBPMNSuggestions } from './actions';
+import { getGeneratedBPMNXml } from './actions';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
 interface Message {
   id: string;
-  text: string | string[]; // string for normal text, string[] for AI suggestions
+  text: string; 
   sender: 'user' | 'ai';
   isXML?: boolean;
-  isSuggestions?: boolean;
 }
 
 export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'initial-ai-message',
-      text: "Bonjour ! Décrivez le processus que vous souhaitez modéliser en BPMN. Je vais tenter de générer une représentation textuelle structurée des éléments BPMN.",
+      text: "Bonjour ! Décrivez le processus que vous souhaitez modéliser. Je vais tenter de générer le fichier XML BPMN 2.0 correspondant.",
       sender: 'ai',
     },
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [lastAIResponseXML, setLastAIResponseXML] = useState<string | null>(null);
-  const [lastAISuggestions, setLastAISuggestions] = useState<string[] | null>(null);
+  const [lastGeneratedXml, setLastGeneratedXml] = useState<string | null>(null);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -47,51 +46,8 @@ export default function ChatInterface() {
     setInputValue(e.target.value);
   };
 
-  const generateSimplifiedXML = (suggestions: string[]): string => {
-    let simplifiedXML = `<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="SimulatedDef_${Date.now()}">\n  <bpmn:process id="SimulatedProcess_${Date.now()}" isExecutable="false">\n`;
-    let elementIdCounter = 1;
-    let lastElementId: string | null = null;
-
-    suggestions.forEach(suggestion => {
-      const [type, ...nameParts] = suggestion.split(': ');
-      const name = nameParts.join(': ') || type; // Handle cases like "Start Event" where there's no colon part.
-      let currentElementId: string | null = null;
-
-      if (type.toLowerCase().includes("start event")) {
-        currentElementId = `start_${elementIdCounter}`;
-        simplifiedXML += `    <bpmn:startEvent id="${currentElementId}" name="${name.trim()}"/>\n`;
-      } else if (type.toLowerCase().includes("task")) {
-        currentElementId = `task_${elementIdCounter}`;
-        simplifiedXML += `    <bpmn:task id="${currentElementId}" name="${name.trim()}"/>\n`;
-      } else if (type.toLowerCase().includes("exclusive gateway")) {
-        currentElementId = `exclusiveGateway_${elementIdCounter}`;
-        simplifiedXML += `    <bpmn:exclusiveGateway id="${currentElementId}" name="${name.trim()}"/>\n`;
-      } else if (type.toLowerCase().includes("parallel gateway")) {
-        currentElementId = `parallelGateway_${elementIdCounter}`;
-        simplifiedXML += `    <bpmn:parallelGateway id="${currentElementId}" name="${name.trim()}"/>\n`;
-      } else if (type.toLowerCase().includes("inclusive gateway")) {
-        currentElementId = `inclusiveGateway_${elementIdCounter}`;
-        simplifiedXML += `    <bpmn:inclusiveGateway id="${currentElementId}" name="${name.trim()}"/>\n`;
-      } else if (type.toLowerCase().includes("end event")) {
-        currentElementId = `end_${elementIdCounter}`;
-        simplifiedXML += `    <bpmn:endEvent id="${currentElementId}" name="${name.trim()}"/>\n`;
-      }
-      // Add sequence flow if there's a previous element and the current one is not a flow itself
-      if (lastElementId && currentElementId && !type.toLowerCase().includes("sequence flow")) {
-        simplifiedXML += `    <bpmn:sequenceFlow id="flow_${lastElementId}_${currentElementId}" sourceRef="${lastElementId}" targetRef="${currentElementId}"/>\n`;
-      }
-      
-      if (currentElementId && !type.toLowerCase().includes("sequence flow")) {
-        lastElementId = currentElementId;
-        elementIdCounter++;
-      }
-    });
-
-    simplifiedXML += `  </bpmn:process>\n</bpmn:definitions>`;
-    return simplifiedXML;
-  };
-
-  const handleSendMessage = async () => {
+  const handleSendMessage = async (event?: FormEvent<HTMLFormElement>) => {
+    if (event) event.preventDefault(); // Prevent form submission if called from form
     if (inputValue.trim() === '' || isLoading) return;
 
     const newUserMessage: Message = {
@@ -100,36 +56,32 @@ export default function ChatInterface() {
       sender: 'user',
     };
     setMessages((prevMessages) => [...prevMessages, newUserMessage]);
+    const currentInput = inputValue; // Capture input value before clearing
     setInputValue('');
     setIsLoading(true);
+    setLastGeneratedXml(null); 
 
     try {
-      const result = await getBPMNSuggestions(newUserMessage.text as string);
+      const result = await getGeneratedBPMNXml(currentInput); 
       if (result.error) {
         throw new Error(result.error);
       }
-      if (result.suggestions && result.suggestions.length > 0) {
-        const aiSuggestions = result.suggestions;
+      if (result.bpmnXml) {
         const newAIMessage: Message = {
-          id: Date.now().toString() + '-ai',
-          text: aiSuggestions,
+          id: Date.now().toString() + '-ai-xml',
+          text: result.bpmnXml,
           sender: 'ai',
-          isSuggestions: true,
+          isXML: true,
         };
         setMessages((prevMessages) => [...prevMessages, newAIMessage]);
-        setLastAISuggestions(aiSuggestions);
-        const xml = generateSimplifiedXML(aiSuggestions);
-        setLastAIResponseXML(xml);
-
+        setLastGeneratedXml(result.bpmnXml);
       } else {
-        const noSuggestionsMessage: Message = {
+        const noXmlMessage: Message = {
           id: Date.now().toString() + '-ai-empty',
-          text: "Je n'ai pas pu générer de suggestions pour cette description. Pourriez-vous essayer une autre formulation ?",
+          text: "Je n'ai pas pu générer de XML BPMN pour cette description. Pourriez-vous essayer une autre formulation ou vérifier les logs du serveur IA ?",
           sender: 'ai',
         };
-        setMessages((prevMessages) => [...prevMessages, noSuggestionsMessage]);
-        setLastAISuggestions(null);
-        setLastAIResponseXML(null);
+        setMessages((prevMessages) => [...prevMessages, noXmlMessage]);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Une erreur inconnue est survenue.";
@@ -144,111 +96,108 @@ export default function ChatInterface() {
         description: errorMessage,
         variant: "destructive",
       });
-      setLastAISuggestions(null);
-      setLastAIResponseXML(null);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleDownloadXML = () => {
-    if (!lastAIResponseXML) {
+    if (!lastGeneratedXml) {
       toast({
         title: "Aucun XML à télécharger",
-        description: "Veuillez d'abord générer des suggestions BPMN.",
+        description: "Veuillez d'abord générer un XML BPMN via le chat.",
         variant: "destructive",
       });
       return;
     }
-    const blob = new Blob([lastAIResponseXML], { type: 'application/xml;charset=utf-8' });
+    const blob = new Blob([lastGeneratedXml], { type: 'application/bpmn+xml;charset=utf-8' }); // Correct MIME type
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = 'simulation_bpmn.xml';
+    link.download = `bpmn_model_${Date.now()}.bpmn`; // More unique filename
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     toast({
       title: "Téléchargement réussi",
-      description: "Fichier XML simulé (pseudo-BPMN) téléchargé.",
+      description: "Fichier BPMN (.bpmn) téléchargé.",
     });
   };
 
   return (
     <div className="flex flex-col flex-grow bg-card border rounded-lg shadow-sm overflow-hidden">
-      <ScrollArea className="flex-grow p-4 space-y-4" ref={scrollAreaRef}>
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={cn(
-              'flex items-end space-x-2 max-w-[85%] break-words',
-              msg.sender === 'user' ? 'ml-auto justify-end' : 'mr-auto justify-start'
-            )}
-          >
-            {msg.sender === 'ai' && (
-              <Avatar className="h-8 w-8">
-                <AvatarImage src="https://picsum.photos/seed/ai-avatar/40/40" data-ai-hint="robot face" alt="AI Avatar" />
-                <AvatarFallback>AI</AvatarFallback>
-              </Avatar>
-            )}
+      <ScrollArea className="flex-grow p-4" ref={scrollAreaRef}>
+        <div className="space-y-4">
+          {messages.map((msg) => (
             <div
+              key={msg.id}
               className={cn(
-                'p-3 rounded-xl shadow',
-                msg.sender === 'user'
-                  ? 'bg-primary text-primary-foreground rounded-br-none'
-                  : 'bg-muted text-muted-foreground rounded-bl-none'
+                'flex items-start space-x-2 max-w-[95%] sm:max-w-[85%] break-words', 
+                msg.sender === 'user' ? 'ml-auto justify-end' : 'mr-auto justify-start'
               )}
             >
-              {msg.isSuggestions && Array.isArray(msg.text) ? (
-                <ul className="list-disc list-inside space-y-1">
-                  {msg.text.map((suggestion, index) => (
-                    <li key={index}>{suggestion}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
+              {msg.sender === 'ai' && (
+                <Avatar className="h-8 w-8 flex-shrink-0">
+                  <AvatarImage src="https://picsum.photos/seed/ai-avatar/40/40" data-ai-hint="robot face" alt="AI Avatar" />
+                  <AvatarFallback>AI</AvatarFallback>
+                </Avatar>
+              )}
+              <div
+                className={cn(
+                  'p-3 rounded-xl shadow w-full', 
+                  msg.isXML ? 'bg-gray-800 dark:bg-gray-900 text-gray-100' : // Specific style for XML
+                  msg.sender === 'user'
+                    ? 'bg-primary text-primary-foreground rounded-br-none'
+                    : 'bg-muted text-muted-foreground rounded-bl-none'
+                )}
+              >
+                {msg.isXML ? (
+                  <pre className="text-xs whitespace-pre-wrap font-mono bg-transparent p-0 m-0 overflow-x-auto"><code className="language-xml">{msg.text}</code></pre>
+                ) : (
+                  <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
+                )}
+              </div>
+              {msg.sender === 'user' && (
+                <Avatar className="h-8 w-8 flex-shrink-0">
+                  <AvatarImage src="https://picsum.photos/seed/user-avatar/40/40" data-ai-hint="person icon" alt="User Avatar" />
+                  <AvatarFallback>U</AvatarFallback>
+                </Avatar>
               )}
             </div>
-            {msg.sender === 'user' && (
-              <Avatar className="h-8 w-8">
-                <AvatarImage src="https://picsum.photos/seed/user-avatar/40/40" data-ai-hint="person icon" alt="User Avatar" />
-                <AvatarFallback>U</AvatarFallback>
+          ))}
+          {isLoading && (
+            <div className="flex items-center space-x-2 justify-start">
+              <Avatar className="h-8 w-8 flex-shrink-0">
+                <AvatarImage src="https://picsum.photos/seed/ai-avatar/40/40" data-ai-hint="robot thinking" alt="AI Avatar" />
+                <AvatarFallback>AI</AvatarFallback>
               </Avatar>
-            )}
-          </div>
-        ))}
-        {isLoading && (
-          <div className="flex items-center space-x-2 justify-start">
-            <Avatar className="h-8 w-8">
-              <AvatarImage src="https://picsum.photos/seed/ai-avatar/40/40" data-ai-hint="robot thinking" alt="AI Avatar" />
-              <AvatarFallback>AI</AvatarFallback>
-            </Avatar>
-            <div className="p-3 rounded-xl shadow bg-muted text-muted-foreground rounded-bl-none">
-              <Loader2 className="h-5 w-5 animate-spin" />
+              <div className="p-3 rounded-xl shadow bg-muted text-muted-foreground rounded-bl-none">
+                <Loader2 className="h-5 w-5 animate-spin" />
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </ScrollArea>
-      <div className="p-4 border-t bg-background">
+      <form onSubmit={handleSendMessage} className="p-4 border-t bg-background">
         <div className="flex items-center space-x-2">
           <Input
             type="text"
-            placeholder="Décrivez votre processus ici..."
+            placeholder="Décrivez votre processus pour générer le XML BPMN..."
             value={inputValue}
             onChange={handleInputChange}
-            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
             disabled={isLoading}
             className="flex-grow text-base"
+            aria-label="Entrée utilisateur pour description du processus"
           />
-          <Button onClick={handleSendMessage} disabled={isLoading || inputValue.trim() === ''} aria-label="Envoyer message">
+          <Button type="submit" disabled={isLoading || inputValue.trim() === ''} aria-label="Envoyer message">
             {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
             <span className="ml-2 hidden sm:inline">Envoyer</span>
           </Button>
-          <Button variant="outline" onClick={handleDownloadXML} disabled={!lastAIResponseXML} aria-label="Télécharger XML">
+          <Button variant="outline" type="button" onClick={handleDownloadXML} disabled={!lastGeneratedXml || isLoading} aria-label="Télécharger XML BPMN">
             <Download className="h-5 w-5" />
-            <span className="ml-2 hidden sm:inline">XML</span>
+            <span className="ml-2 hidden sm:inline">BPMN</span>
           </Button>
         </div>
-      </div>
+      </form>
     </div>
   );
 }

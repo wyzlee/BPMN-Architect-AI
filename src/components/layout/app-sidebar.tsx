@@ -15,7 +15,7 @@ import {
   SidebarMenuSubItem,
 } from '@/components/ui/sidebar';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Workflow, MessageSquareText, BookOpen, ChevronsUpDown } from 'lucide-react';
+import { Workflow, MessageSquareText, BookOpen, ChevronsUpDown, Settings } from 'lucide-react'; // Added Settings icon
 import * as AccordionPrimitive from "@radix-ui/react-accordion";
 import { cn } from '@/lib/utils';
 import React from 'react';
@@ -83,7 +83,6 @@ export default function AppSidebar() {
     return pathname.startsWith(href);
   };
   
-  // Determine if any sub-item of "Concepts Clés" is active to keep accordion open
   const conceptsKeyBase = guideSections.find(s => s.label === '2. Concepts Clés')?.subItems?.map(sub => sub.href);
   const defaultAccordionValue = conceptsKeyBase?.some(href => isLinkActive(href)) ? "concepts-cles" : undefined;
 
@@ -105,7 +104,7 @@ export default function AppSidebar() {
               {guideSections.map((section) =>
                 section.subItems ? (
                   <AccordionPrimitive.Item value={section.label.toLowerCase().replace(/\s+/g, '-')} key={section.label} className="border-b-0">
-                     <SidebarAccordionTrigger isActive={section.subItems.some(sub => isLinkActive(sub.href))}>
+                     <SidebarAccordionTrigger isActive={section.basePath ? isLinkActive(section.basePath) : section.subItems.some(sub => isLinkActive(sub.href))}>
                       <BookOpen className="h-4 w-4 text-sidebar-primary" />
                       <span className="group-data-[collapsible=icon]:hidden">{section.label}</span>
                     </SidebarAccordionTrigger>
@@ -140,9 +139,17 @@ export default function AppSidebar() {
             </AccordionPrimitive.Root>
             <SidebarMenuItem>
               <Link href="/chat" legacyBehavior passHref>
-                <SidebarMenuButton isActive={isLinkActive('/chat')} tooltip={{children: "Chat de Génération"}}>
+                <SidebarMenuButton isActive={isLinkActive('/chat')} tooltip={{children: "Chat Génération XML"}}>
                   <MessageSquareText className="h-4 w-4 text-sidebar-primary" />
-                  <span className="group-data-[collapsible=icon]:hidden">Chat de Génération</span>
+                  <span className="group-data-[collapsible=icon]:hidden">Chat Génération XML</span>
+                </SidebarMenuButton>
+              </Link>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <Link href="/admin/system-prompt" legacyBehavior passHref>
+                <SidebarMenuButton isActive={isLinkActive('/admin/system-prompt')} tooltip={{children: "Éditeur Prompt IA"}}>
+                  <Settings className="h-4 w-4 text-sidebar-primary" />
+                  <span className="group-data-[collapsible=icon]:hidden">Éditeur Prompt IA</span>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
