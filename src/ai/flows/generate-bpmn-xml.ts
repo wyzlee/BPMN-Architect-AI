@@ -72,7 +72,7 @@ const generateBPMNXmlFlow = ai.defineFlow(
 
     if (!output || !output.bpmnXml) {
       console.error('AI did not produce BPMN XML output. Refined user input:', flowInput.userInput);
-      throw new Error("L'IA n'a pas réussi à générer le contenu XML BPMN à partir des instructions raffinées.");
+      throw new Error("L'IA n'a pas réussi à générer le contenu XML BPMN à partir des instructions raffinées. Veuillez vérifier le prompt de génération système et réessayer.");
     }
     return output;
   }

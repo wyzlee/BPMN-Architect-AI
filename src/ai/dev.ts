@@ -4,3 +4,4 @@ config();
 
 import '@/ai/flows/generate-bpmn-xml.ts';
 import '@/ai/flows/refine-user-input-flow.ts';
+import '@/ai/flows/validate-bpmn-xml-flow.ts';

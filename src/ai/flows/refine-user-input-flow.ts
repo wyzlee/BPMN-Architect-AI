@@ -69,7 +69,7 @@ const refineUserInputFlow = ai.defineFlow(
 
     if (!output || !output.refinedInstructions) {
       console.error('AI did not produce refined instructions. Raw user input:', flowInput.rawUserInput);
-      throw new Error("L'IA n'a pas réussi à générer les instructions détaillées.");
+      throw new Error("L'IA n'a pas réussi à générer les instructions détaillées. Veuillez vérifier le prompt de raffinement système et réessayer.");
     }
     return output;
   }
@@ -78,4 +78,3 @@ const refineUserInputFlow = ai.defineFlow(
 export async function refineUserInput(input: RefineUserInputInput): Promise<RefineUserInputOutput> {
   return refineUserInputFlow(input);
 }
-

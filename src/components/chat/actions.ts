@@ -2,6 +2,7 @@
 'use server';
 import { generateBPMNXml, type GenerateBPMNXmlInput, type GenerateBPMNXmlOutput } from '@/ai/flows/generate-bpmn-xml';
 import { refineUserInput, type RefineUserInputInput, type RefineUserInputOutput } from '@/ai/flows/refine-user-input-flow';
+import { validateBPMNXml, type ValidateBPMNXmlInput, type ValidateBPMNXmlOutput } from '@/ai/flows/validate-bpmn-xml-flow';
 
 interface RefinementResult {
   refinedInstructions: string | null;
@@ -21,45 +22,58 @@ export async function getRefinedInstructions(rawUserInput: string): Promise<Refi
       return { refinedInstructions: result.refinedInstructions, error: null };
     } else {
       console.warn("AI refinement flow returned an unexpected result or no refined instructions:", result);
-      return { refinedInstructions: null, error: "L'IA n'a pas retourné d'instructions raffinées valides." };
+      return { refinedInstructions: null, error: "L'IA de raffinement n'a pas retourné d'instructions valides. Veuillez vérifier le prompt de raffinement ou réessayer." };
     }
   } catch (error) {
     console.error("Error fetching refined instructions from AI flow:", error);
     const errorMessage = error instanceof Error ? error.message : "Une erreur interne est survenue lors de la communication avec l'IA pour le raffinement.";
-    return { refinedInstructions: null, error: `Échec du raffinement des instructions par l'IA: ${errorMessage}` };
+    return { refinedInstructions: null, error: `Échec du raffinement des instructions par l'IA: ${errorMessage}. Assurez-vous que le service Genkit est démarré et que le prompt de raffinement est configuré.` };
   }
 }
 
 
 interface GenerationResult {
   bpmnXml: string | null;
+  validation?: ValidateBPMNXmlOutput | null;
   error: string | null;
 }
 
-// This function now expects refined user input
-export async function getGeneratedBPMNXml(refinedUserInput: string): Promise<GenerationResult> {
+export async function getGeneratedAndValidatedBPMNXml(refinedUserInput: string): Promise<GenerationResult> {
   if (!refinedUserInput.trim()) {
     return { bpmnXml: null, error: "Les instructions raffinées pour l'IA ne peuvent pas être vides." };
   }
   
-  try {
-    // The 'userInput' for generateBPMNXml is now the refined instructions
-    const input: GenerateBPMNXmlInput = { userInput: refinedUserInput };
-    const result: GenerateBPMNXmlOutput = await generateBPMNXml(input); 
+  let generatedXml: string | null = null;
 
-    if (result && result.bpmnXml) {
-      return { bpmnXml: result.bpmnXml, error: null };
-    } else {
-      console.warn("AI BPMN generation flow returned an unexpected result or no BPMN XML:", result);
-      return { bpmnXml: null, error: "L'IA n'a pas retourné de XML BPMN valide à partir des instructions raffinées." };
+  try {
+    const generationInput: GenerateBPMNXmlInput = { userInput: refinedUserInput };
+    const generationResult: GenerateBPMNXmlOutput = await generateBPMNXml(generationInput); 
+
+    if (!generationResult || !generationResult.bpmnXml) {
+      console.warn("AI BPMN generation flow returned an unexpected result or no BPMN XML:", generationResult);
+      return { bpmnXml: null, error: "L'IA de génération n'a pas retourné de XML BPMN valide. Veuillez vérifier le prompt de génération ou réessayer." };
     }
+    generatedXml = generationResult.bpmnXml;
 
   } catch (error) {
     console.error("Error fetching BPMN XML from AI flow with refined input:", error);
-    if (error instanceof Error && error.message === "L'IA n'a pas réussi à générer le contenu XML BPMN.") {
-        return { bpmnXml: null, error: error.message };
-    }
     const errorMessage = error instanceof Error ? error.message : "Une erreur interne est survenue lors de la communication avec l'IA pour la génération BPMN.";
-    return { bpmnXml: null, error: `Échec de la génération du XML BPMN par l'IA: ${errorMessage}` };
+    return { bpmnXml: null, error: `Échec de la génération du XML BPMN par l'IA: ${errorMessage}. Assurez-vous que le service Genkit est démarré et que le prompt de génération est configuré.` };
+  }
+
+  try {
+    const validationInput: ValidateBPMNXmlInput = { bpmnXml: generatedXml };
+    const validationResult: ValidateBPMNXmlOutput = await validateBPMNXml(validationInput);
+    return { bpmnXml: generatedXml, validation: validationResult, error: null };
+
+  } catch (error) {
+    console.error("Error validating BPMN XML with AI flow:", error);
+    const errorMessage = error instanceof Error ? error.message : "Une erreur interne est survenue lors de la validation BPMN.";
+    // Return the generated XML even if validation fails, but include the error
+    return { 
+        bpmnXml: generatedXml, 
+        validation: { isValid: false, issues: [`La validation a échoué: ${errorMessage}. Assurez-vous que le service Genkit est démarré et que le prompt de validation est configuré.`]}, 
+        error: null // Error is about validation, not generation itself here
+    };
   }
 }

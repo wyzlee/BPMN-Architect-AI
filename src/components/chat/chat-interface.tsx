@@ -7,11 +7,20 @@ import { Button, type ButtonProps } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Send, Download, Loader2, CheckCircle, XCircle, Wand2 } from 'lucide-react';
-import { getGeneratedBPMNXml, getRefinedInstructions } from './actions';
+import { Send, Download, Loader2, CheckCircle, XCircle, Wand2, Eye, EyeOff, ListChecks } from 'lucide-react';
+import { getGeneratedAndValidatedBPMNXml, getRefinedInstructions } from './actions';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
+import BpmnViewer from '@/components/bpmn/bpmn-viewer';
+import type { ValidateBPMNXmlOutput } from '@/ai/flows/validate-bpmn-xml-flow';
+import { examplePrompts, type BpmnExamplePrompt } from '@/lib/bpmn-examples';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 
 interface ActionButton {
@@ -27,26 +36,27 @@ interface Message {
   text: string;
   sender: 'user' | 'ai';
   isXML?: boolean;
+  validationResult?: ValidateBPMNXmlOutput;
   isRefinement?: boolean;
-  refinedText?: string; // The refined text, if isRefinement is true and requires confirmation
+  refinedText?: string; 
   requiresConfirmation?: boolean;
-  confirmationProcessed?: boolean; // True if user has acted on this confirmation
-  originalUserInput?: string; // The original user input that led to this refined text
+  confirmationProcessed?: boolean; 
+  originalUserInput?: string; 
   actionButtons?: ActionButton[];
+  showViewer?: boolean;
 }
 
 export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'initial-ai-message',
-      text: "Bonjour ! Décrivez le processus que vous souhaitez modéliser. Je vais d'abord raffiner votre description en instructions détaillées, puis vous pourrez générer le XML BPMN.",
+      text: "Bonjour ! Décrivez le processus que vous souhaitez modéliser ou choisissez un exemple. Je vais d'abord raffiner votre description en instructions détaillées, puis vous pourrez générer et valider le XML BPMN.",
       sender: 'ai',
     },
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isLoadingRefinement, setIsLoadingRefinement] = useState(false);
   const [isLoadingBpmn, setIsLoadingBpmn] = useState(false);
-  const [lastGeneratedXml, setLastGeneratedXml] = useState<string | null>(null);
   const [editingRefinedText, setEditingRefinedText] = useState<string | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
@@ -67,12 +77,20 @@ export default function ChatInterface() {
     setInputValue(e.target.value);
   };
 
+  const toggleViewerVisibility = (messageId: string) => {
+    setMessages(prevMessages =>
+      prevMessages.map(msg =>
+        msg.id === messageId ? { ...msg, showViewer: !msg.showViewer } : msg
+      )
+    );
+  };
+
   const processMessageForBPMN = useCallback(async (messageId: string, instructions: string) => {
     setIsLoadingBpmn(true);
     setMessages(prev => prev.map(m => m.id === messageId ? { ...m, confirmationProcessed: true, actionButtons: undefined } : m));
 
     try {
-      const result = await getGeneratedBPMNXml(instructions);
+      const result = await getGeneratedAndValidatedBPMNXml(instructions);
       if (result.error) throw new Error(result.error);
 
       if (result.bpmnXml) {
@@ -81,9 +99,10 @@ export default function ChatInterface() {
           text: result.bpmnXml,
           sender: 'ai',
           isXML: true,
+          validationResult: result.validation,
+          showViewer: true, // Show viewer by default for new XML
         };
         setMessages(prev => [...prev, newAIMessage]);
-        setLastGeneratedXml(result.bpmnXml);
       } else {
         const noXmlMessage: Message = {
           id: Date.now().toString() + '-ai-empty',
@@ -93,14 +112,14 @@ export default function ChatInterface() {
         setMessages(prev => [...prev, noXmlMessage]);
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Une erreur inconnue est survenue lors de la génération BPMN.";
+      const errorMessage = error instanceof Error ? error.message : "Une erreur inconnue est survenue lors de la génération ou validation BPMN.";
       const newAIErrorMessage: Message = {
         id: Date.now().toString() + '-ai-error-bpmn',
-        text: `Erreur lors de la génération BPMN : ${errorMessage}`,
+        text: `Erreur lors de la génération/validation BPMN : ${errorMessage}`,
         sender: 'ai',
       };
       setMessages(prev => [...prev, newAIErrorMessage]);
-      toast({ title: "Erreur de Génération BPMN", description: errorMessage, variant: "destructive" });
+      toast({ title: "Erreur de Génération/Validation BPMN", description: errorMessage, variant: "destructive" });
     } finally {
       setIsLoadingBpmn(false);
     }
@@ -109,30 +128,30 @@ export default function ChatInterface() {
   const handleEditInstructions = (messageId: string, currentInstructions: string) => {
     setEditingMessageId(messageId);
     setEditingRefinedText(currentInstructions);
-     setMessages(prev => prev.map(m => m.id === messageId ? { ...m, confirmationProcessed: true, actionButtons: undefined } : m));
+    setMessages(prev => prev.map(m => m.id === messageId ? { ...m, confirmationProcessed: true, actionButtons: undefined } : m));
   };
 
   const handleSaveEditedInstructions = async () => {
     if (editingMessageId && editingRefinedText) {
-      // Add a message indicating the user has edited the instructions
       const editedMarkerMessage: Message = {
         id: Date.now().toString() + '-user-edited',
         text: "J'ai modifié les instructions. Voici la nouvelle version :",
         sender: 'user',
       };
-       const newRefinedMessage: Message = {
-        id: editingMessageId + '-edited-' + Date.now(), // Ensure unique ID
+      const newRefinedMessageId = editingMessageId + '-edited-' + Date.now();
+      const newRefinedMessage: Message = {
+        id: newRefinedMessageId,
         text: editingRefinedText,
-        sender: 'ai', // Displayed as if AI proposed this new version for confirmation
+        sender: 'ai', 
         isRefinement: true,
         refinedText: editingRefinedText,
         requiresConfirmation: true,
         confirmationProcessed: false,
         originalUserInput: messages.find(m => m.id === editingMessageId)?.originalUserInput || "N/A",
-         actionButtons: [
-          { id: 'generate-' + editingMessageId, label: 'Générer BPMN', onClick: () => processMessageForBPMN(editingMessageId + '-edited-' + Date.now(), editingRefinedText!), Icon: CheckCircle, variant: 'default' },
-          { id: 'edit-' + editingMessageId, label: 'Modifier', onClick: () => handleEditInstructions(editingMessageId + '-edited-' + Date.now(), editingRefinedText!), Icon: Wand2, variant: 'outline' },
-          { id: 'cancel-' + editingMessageId, label: 'Annuler', onClick: () => setMessages(prev => prev.map(m => m.id === editingMessageId + '-edited-' + Date.now() ? { ...m, confirmationProcessed: true, actionButtons: undefined } : m)), Icon: XCircle, variant: 'ghost' },
+        actionButtons: [
+          { id: 'generate-' + newRefinedMessageId, label: 'Générer BPMN', onClick: () => processMessageForBPMN(newRefinedMessageId, editingRefinedText!), Icon: CheckCircle, variant: 'default' },
+          { id: 'edit-' + newRefinedMessageId, label: 'Modifier', onClick: () => handleEditInstructions(newRefinedMessageId, editingRefinedText!), Icon: Wand2, variant: 'outline' },
+          { id: 'cancel-' + newRefinedMessageId, label: 'Annuler', onClick: () => setMessages(prev => prev.map(m => m.id === newRefinedMessageId ? { ...m, confirmationProcessed: true, actionButtons: undefined, text: "Génération annulée pour ces instructions modifiées." } : m)), Icon: XCircle, variant: 'ghost' },
         ]
       };
       setMessages(prev => [...prev, editedMarkerMessage, newRefinedMessage]);
@@ -141,21 +160,30 @@ export default function ChatInterface() {
     }
   };
 
+  const handleSendMessage = async (event?: FormEvent<HTMLFormElement> | string) => {
+    if (typeof event !== 'string' && event) event.preventDefault();
+    
+    const currentInput = typeof event === 'string' ? event : inputValue;
 
-  const handleSendMessage = async (event?: FormEvent<HTMLFormElement>) => {
-    if (event) event.preventDefault();
-    if (inputValue.trim() === '' || isLoadingRefinement || isLoadingBpmn) return;
+    if (currentInput.trim() === '' || isLoadingRefinement || isLoadingBpmn) {
+        if(currentInput.trim() === '') toast({ title: "Entrée vide", description: "Veuillez entrer une description pour votre processus.", variant: "destructive" });
+        return;
+    }
+    if (currentInput.trim().length < 10) {
+      toast({ title: "Entrée trop courte", description: "Veuillez fournir une description plus détaillée (au moins 10 caractères).", variant: "destructive" });
+      return;
+    }
 
-    const rawUserInput = inputValue;
+
+    const rawUserInput = currentInput;
     const newUserMessage: Message = {
       id: Date.now().toString() + '-user-raw',
       text: rawUserInput,
       sender: 'user',
     };
     setMessages(prev => [...prev, newUserMessage]);
-    setInputValue('');
+    if (typeof event !== 'string') setInputValue('');
     setIsLoadingRefinement(true);
-    setLastGeneratedXml(null);
 
     try {
       const result = await getRefinedInstructions(rawUserInput);
@@ -175,12 +203,12 @@ export default function ChatInterface() {
           actionButtons: [
             { id: 'generate-' + refinedMessageId, label: 'Générer BPMN', onClick: () => processMessageForBPMN(refinedMessageId, result.refinedInstructions!), Icon: CheckCircle, variant: 'default' },
             { id: 'edit-' + refinedMessageId, label: 'Modifier', onClick: () => handleEditInstructions(refinedMessageId, result.refinedInstructions!), Icon: Wand2, variant: 'outline' },
-            { id: 'cancel-' + refinedMessageId, label: 'Annuler', onClick: () => setMessages(prev => prev.map(m => m.id === refinedMessageId ? { ...m, confirmationProcessed: true, actionButtons: undefined } : m)), Icon: XCircle, variant: 'ghost' },
+            { id: 'cancel-' + refinedMessageId, label: 'Annuler', onClick: () => setMessages(prev => prev.map(m => m.id === refinedMessageId ? { ...m, confirmationProcessed: true, actionButtons: undefined, text: "Génération annulée pour ces instructions." } : m)), Icon: XCircle, variant: 'ghost' },
           ]
         };
         setMessages(prev => [...prev, newAIRefinedMessage]);
       } else {
-        throw new Error("L'IA n'a pas pu raffiner les instructions.");
+        throw new Error("L'IA n'a pas pu raffiner les instructions. Vérifiez le prompt de raffinement ou réessayez.");
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Une erreur inconnue est survenue lors du raffinement.";
@@ -195,13 +223,21 @@ export default function ChatInterface() {
       setIsLoadingRefinement(false);
     }
   };
+  
+  const handleLoadExample = (example: BpmnExamplePrompt) => {
+    setInputValue(example.prompt);
+    toast({ title: "Exemple chargé", description: `"${example.title}" a été chargé dans le champ de saisie.` });
+    // Optionally, auto-send:
+    // handleSendMessage(example.prompt); 
+  };
 
   const handleDownloadXML = () => {
-    if (!lastGeneratedXml) {
+    const lastXmlMessage = messages.slice().reverse().find(msg => msg.isXML && msg.text);
+    if (!lastXmlMessage || !lastXmlMessage.text) {
       toast({ title: "Aucun XML à télécharger", description: "Veuillez d'abord générer un XML BPMN.", variant: "destructive" });
       return;
     }
-    const blob = new Blob([lastGeneratedXml], { type: 'application/bpmn+xml;charset=utf-8' });
+    const blob = new Blob([lastXmlMessage.text], { type: 'application/bpmn+xml;charset=utf-8' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `bpmn_model_${Date.now()}.bpmn`;
@@ -241,11 +277,43 @@ export default function ChatInterface() {
                     : 'bg-muted text-muted-foreground rounded-bl-none'
                 )}
               >
-                {msg.isXML ? (
-                  <pre className="text-xs whitespace-pre-wrap font-mono bg-transparent p-0 m-0 overflow-x-auto"><code className="language-xml">{msg.text}</code></pre>
-                ) : (
-                  <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
+                {msg.isXML && msg.text && (
+                  <>
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="font-semibold text-sm">XML BPMN Généré</h4>
+                      <Button variant="ghost" size="sm" onClick={() => toggleViewerVisibility(msg.id)}>
+                        {msg.showViewer ? <EyeOff className="h-4 w-4 mr-1" /> : <Eye className="h-4 w-4 mr-1" />}
+                        {msg.showViewer ? "Cacher Diagramme" : "Voir Diagramme"}
+                      </Button>
+                    </div>
+                    {msg.showViewer && <BpmnViewer xml={msg.text} className="mb-2" />}
+                    <details className="max-h-64 overflow-y-auto">
+                      <summary className="cursor-pointer text-xs text-gray-400 hover:text-gray-200">Voir/Cacher XML</summary>
+                      <pre className="mt-1 text-xs whitespace-pre-wrap font-mono bg-transparent p-0 m-0"><code className="language-xml">{msg.text}</code></pre>
+                    </details>
+                    {msg.validationResult && (
+                      <div className={cn(
+                        "mt-3 pt-3 border-t",
+                        msg.validationResult.isValid ? "border-green-500/30" : "border-red-500/30"
+                      )}>
+                        <h5 className={cn(
+                          "text-sm font-semibold mb-1",
+                          msg.validationResult.isValid ? "text-green-400" : "text-red-400"
+                        )}>
+                          Résultat Validation: {msg.validationResult.isValid ? "Valide" : "Invalide"}
+                        </h5>
+                        {msg.validationResult.issues && msg.validationResult.issues.length > 0 && (
+                          <ul className="list-disc list-inside text-xs space-y-0.5">
+                            {msg.validationResult.issues.map((issue, index) => (
+                              <li key={index}>{issue}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
+                {!msg.isXML && <p className="text-sm whitespace-pre-wrap">{msg.text}</p>}
                 {msg.requiresConfirmation && !msg.confirmationProcessed && msg.actionButtons && (
                   <div className="mt-3 pt-3 border-t border-accent/20 flex flex-wrap gap-2">
                     {msg.actionButtons.map(btn => (
@@ -274,7 +342,7 @@ export default function ChatInterface() {
               <div className="p-3 rounded-xl shadow bg-muted text-muted-foreground rounded-bl-none">
                 <Loader2 className="h-5 w-5 animate-spin" />
                  <span className="ml-2 text-sm">
-                  {isLoadingRefinement ? "Raffinement en cours..." : "Génération BPMN..."}
+                  {isLoadingRefinement ? "Raffinement en cours..." : "Génération & Validation BPMN..."}
                 </span>
               </div>
             </div>
@@ -309,11 +377,25 @@ export default function ChatInterface() {
             className="flex-grow text-base"
             aria-label="Entrée utilisateur pour description du processus"
           />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" disabled={currentLoading || !!editingMessageId} aria-label="Choisir un exemple">
+                <ListChecks className="h-5 w-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {examplePrompts.map((ex) => (
+                <DropdownMenuItem key={ex.id} onClick={() => handleLoadExample(ex)}>
+                  {ex.title}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button type="submit" disabled={currentLoading || inputValue.trim() === '' || !!editingMessageId} aria-label="Envoyer message">
             {currentLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
             <span className="ml-2 hidden sm:inline">Envoyer</span>
           </Button>
-          <Button variant="outline" type="button" onClick={handleDownloadXML} disabled={!lastGeneratedXml || currentLoading || !!editingMessageId} aria-label="Télécharger XML BPMN">
+          <Button variant="outline" type="button" onClick={handleDownloadXML} disabled={!messages.some(m => m.isXML && m.text) || currentLoading || !!editingMessageId} aria-label="Télécharger XML BPMN">
             <Download className="h-5 w-5" />
             <span className="ml-2 hidden sm:inline">BPMN</span>
           </Button>
