@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import type { ValidateBPMNXmlOutput } from '@/ai/flows/validate-bpmn-xml-flow';
-import { examplePrompts, type BpmnExamplePrompt } from '@/lib/bpmn-examples';
+import { examplePrompts } from '@/lib/bpmn-examples';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -80,12 +80,12 @@ export default function ChatInterface() {
   
   const generateActionButtonsForXml = (messageId: string, xmlContent: string, validation: ValidateBPMNXmlOutput | undefined): ActionButton[] => {
     const buttons: ActionButton[] = [
-      { id: `download-${messageId}`, label: 'Télécharger XML', onClick: () => handleDownloadSpecificXML(xmlContent), Icon: Download, variant: 'outline', tooltip: 'Télécharger ce XML BPMN' },
+      { id: `download-${messageId}`, label: 'Télécharger BPMN', onClick: () => handleDownloadSpecificXML(xmlContent), Icon: Download, variant: 'secondary', tooltip: 'Télécharger ce XML BPMN' },
     ];
-    if (validation && !validation.isValid) {
+    if (validation && !validation.isValid && validation.issues && validation.issues.length > 0) {
       buttons.push({ 
         id: `correct-${messageId}`, 
-        label: 'Tenter Correction', 
+        label: 'Tenter Correction IA', 
         onClick: () => handleAttemptCorrection(messageId, xmlContent, validation.issues || []), 
         Icon: ShieldAlert, 
         variant: 'destructive',
@@ -153,7 +153,7 @@ export default function ChatInterface() {
     
     const correctingMessage: Message = {
       id: Date.now().toString() + '-ai-correcting',
-      text: "Tentative de correction du XML BPMN en cours...",
+      text: "Tentative de correction du XML BPMN par l'IA en cours...",
       sender: 'ai',
       isCorrectionAttempt: true,
     };
@@ -169,7 +169,7 @@ export default function ChatInterface() {
         const correctedXmlMessageId = Date.now().toString() + '-ai-corrected-xml';
         const newCorrectedMessage: Message = {
           id: correctedXmlMessageId,
-          text: `Voici une tentative de correction basée sur les problèmes précédents :\n\n${result.correctedBpmnXml}`,
+          text: result.correctedBpmnXml, // Display only XML for correction attempts for now
           sender: 'ai',
           isXML: true,
           validationResult: result.validation,
@@ -177,7 +177,7 @@ export default function ChatInterface() {
           isCorrectionAttempt: true,
         };
         setMessages(prev => [...prev, newCorrectedMessage]);
-         toast({ title: "Correction Tentée", description: "L'IA a tenté de corriger le XML. Veuillez vérifier le nouveau résultat.", variant: "default" });
+         toast({ title: "Correction Tentée par l'IA", description: "L'IA a tenté de corriger le XML. Veuillez vérifier le nouveau résultat et sa validation.", variant: "default" });
       } else {
          const noCorrectionMessage: Message = {
           id: Date.now().toString() + '-ai-no-correction',
@@ -193,7 +193,7 @@ export default function ChatInterface() {
       const errorMessage = error instanceof Error ? error.message : "Une erreur inconnue est survenue lors de la tentative de correction.";
       const newAIErrorCorrectionMessage: Message = {
         id: Date.now().toString() + '-ai-error-correction',
-        text: `Erreur lors de la tentative de correction BPMN : ${errorMessage}`,
+        text: `Erreur lors de la tentative de correction BPMN par l'IA : ${errorMessage}`,
         sender: 'ai',
         isCorrectionAttempt: true,
       };
@@ -314,11 +314,6 @@ export default function ChatInterface() {
     }
   };
   
-  const handleLoadExample = (example: BpmnExamplePrompt) => {
-    setInputValue(example.prompt);
-    toast({ title: "Exemple chargé", description: `"${example.title}" a été chargé dans le champ de saisie.` });
-  };
-
   const handleDownloadSpecificXML = (xmlContent: string) => {
     if (!xmlContent) {
       toast({ title: "Aucun XML à télécharger", description: "Le contenu XML est vide.", variant: "destructive" });
@@ -332,15 +327,6 @@ export default function ChatInterface() {
     link.click();
     document.body.removeChild(link);
     toast({ title: "Téléchargement réussi", description: "Fichier BPMN (.bpmn) téléchargé." });
-  };
-
-  const handleDownloadLastXML = () => {
-    const lastXmlMessage = messages.slice().reverse().find(msg => msg.isXML && msg.text);
-    if (!lastXmlMessage || !lastXmlMessage.text) {
-      toast({ title: "Aucun XML à télécharger", description: "Veuillez d'abord générer un XML BPMN.", variant: "destructive" });
-      return;
-    }
-    handleDownloadSpecificXML(lastXmlMessage.text);
   };
   
   const currentLoading = isLoadingRefinement || isLoadingBpmn || isLoadingCorrection;
@@ -377,12 +363,12 @@ export default function ChatInterface() {
                   <>
                     <div className="flex justify-between items-center mb-2">
                       <h4 className="font-semibold text-sm text-gray-200">
-                        {msg.isCorrectionAttempt ? "Tentative de Correction BPMN" : "Résultat de la Génération BPMN"}
+                        {msg.isCorrectionAttempt ? "Tentative de Correction BPMN par l'IA" : "Résultat de la Génération BPMN"}
                       </h4>
                     </div>
                     <details className="max-h-64 overflow-y-auto">
                       <summary className="cursor-pointer text-xs text-gray-400 hover:text-gray-200">Voir/Cacher XML {msg.isCorrectionAttempt ? "Corrigé" : "Généré"}</summary>
-                      <pre className="mt-1 text-xs whitespace-pre-wrap font-mono bg-transparent p-0 m-0"><code className="language-xml">{msg.isCorrectionAttempt ? msg.text.substring(msg.text.indexOf('<?xml')) : msg.text}</code></pre>
+                      <pre className="mt-1 text-xs whitespace-pre-wrap font-mono bg-transparent p-0 m-0"><code className="language-xml">{msg.text}</code></pre>
                     </details>
                     {msg.validationResult && (
                       <div className={cn(
@@ -515,12 +501,9 @@ export default function ChatInterface() {
             {currentLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
             <span className="ml-2 hidden sm:inline">Envoyer</span>
           </Button>
-          <Button variant="outline" type="button" onClick={handleDownloadLastXML} disabled={!messages.some(m => m.isXML && m.text) || currentLoading || !!editingMessageId} aria-label="Télécharger dernier XML BPMN">
-            <Download className="h-5 w-5" />
-            <span className="ml-2 hidden sm:inline">BPMN</span>
-          </Button>
         </div>
       </form>
     </div>
   );
 }
+
