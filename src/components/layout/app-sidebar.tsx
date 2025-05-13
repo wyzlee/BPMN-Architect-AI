@@ -15,7 +15,7 @@ import {
   SidebarMenuSubItem,
 } from '@/components/ui/sidebar';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Workflow, MessageSquareText, BookOpen, ChevronsUpDown, Settings } from 'lucide-react'; // Added Settings icon
+import { Workflow, MessageSquareText, BookOpen, ChevronsUpDown, Settings, FileEdit } from 'lucide-react'; 
 import * as AccordionPrimitive from "@radix-ui/react-accordion";
 import { cn } from '@/lib/utils';
 import React from 'react';
@@ -145,11 +145,19 @@ export default function AppSidebar() {
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
+             <SidebarMenuItem>
+              <Link href="/admin/refinement-prompt" legacyBehavior passHref>
+                <SidebarMenuButton isActive={isLinkActive('/admin/refinement-prompt')} tooltip={{children: "Éditeur Prompt Raffinement"}}>
+                  <FileEdit className="h-4 w-4 text-sidebar-primary" />
+                  <span className="group-data-[collapsible=icon]:hidden">Éditeur Prompt Raffinement</span>
+                </SidebarMenuButton>
+              </Link>
+            </SidebarMenuItem>
             <SidebarMenuItem>
               <Link href="/admin/system-prompt" legacyBehavior passHref>
-                <SidebarMenuButton isActive={isLinkActive('/admin/system-prompt')} tooltip={{children: "Éditeur Prompt IA"}}>
+                <SidebarMenuButton isActive={isLinkActive('/admin/system-prompt')} tooltip={{children: "Éditeur Prompt Génération"}}>
                   <Settings className="h-4 w-4 text-sidebar-primary" />
-                  <span className="group-data-[collapsible=icon]:hidden">Éditeur Prompt IA</span>
+                  <span className="group-data-[collapsible=icon]:hidden">Éditeur Prompt Génération</span>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
