@@ -7,12 +7,12 @@ import { Button, type ButtonProps } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Send, Download, Loader2, CheckCircle, XCircle, Wand2, Eye, EyeOff, ListChecks } from 'lucide-react';
+import { Send, Download, Loader2, CheckCircle, XCircle, Wand2, ListChecks } from 'lucide-react';
 import { getGeneratedAndValidatedBPMNXml, getRefinedInstructions } from './actions';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
-import BpmnViewer from '@/components/bpmn/bpmn-viewer';
+// import BpmnViewer from '@/components/bpmn/bpmn-viewer'; // Viewer removed
 import type { ValidateBPMNXmlOutput } from '@/ai/flows/validate-bpmn-xml-flow';
 import { examplePrompts, type BpmnExamplePrompt } from '@/lib/bpmn-examples';
 import {
@@ -43,7 +43,7 @@ interface Message {
   confirmationProcessed?: boolean; 
   originalUserInput?: string; 
   actionButtons?: ActionButton[];
-  showViewer?: boolean;
+  // showViewer?: boolean; // Removed viewer visibility state
 }
 
 export default function ChatInterface() {
@@ -77,13 +77,7 @@ export default function ChatInterface() {
     setInputValue(e.target.value);
   };
 
-  const toggleViewerVisibility = (messageId: string) => {
-    setMessages(prevMessages =>
-      prevMessages.map(msg =>
-        msg.id === messageId ? { ...msg, showViewer: !msg.showViewer } : msg
-      )
-    );
-  };
+  // toggleViewerVisibility removed as viewer is removed
 
   const processMessageForBPMN = useCallback(async (messageId: string, instructions: string) => {
     setIsLoadingBpmn(true);
@@ -100,7 +94,7 @@ export default function ChatInterface() {
           sender: 'ai',
           isXML: true,
           validationResult: result.validation,
-          showViewer: true, // Show viewer by default for new XML
+          // showViewer: true, // Removed
         };
         setMessages(prev => [...prev, newAIMessage]);
       } else {
@@ -227,8 +221,6 @@ export default function ChatInterface() {
   const handleLoadExample = (example: BpmnExamplePrompt) => {
     setInputValue(example.prompt);
     toast({ title: "Exemple chargé", description: `"${example.title}" a été chargé dans le champ de saisie.` });
-    // Optionally, auto-send:
-    // handleSendMessage(example.prompt); 
   };
 
   const handleDownloadXML = () => {
@@ -270,7 +262,7 @@ export default function ChatInterface() {
               <div
                 className={cn(
                   'p-3 rounded-xl shadow w-full',
-                  msg.isXML ? 'bg-gray-800 dark:bg-gray-900 text-gray-100' :
+                  msg.isXML ? 'bg-gray-800 dark:bg-gray-900 text-gray-100' : // Custom style for XML block
                   msg.isRefinement ? 'bg-accent/10 border border-accent/30 text-foreground' :
                   msg.sender === 'user'
                     ? 'bg-primary text-primary-foreground rounded-br-none'
@@ -280,34 +272,47 @@ export default function ChatInterface() {
                 {msg.isXML && msg.text && (
                   <>
                     <div className="flex justify-between items-center mb-2">
-                      <h4 className="font-semibold text-sm">XML BPMN Généré</h4>
-                      <Button variant="ghost" size="sm" onClick={() => toggleViewerVisibility(msg.id)}>
-                        {msg.showViewer ? <EyeOff className="h-4 w-4 mr-1" /> : <Eye className="h-4 w-4 mr-1" />}
-                        {msg.showViewer ? "Cacher Diagramme" : "Voir Diagramme"}
-                      </Button>
+                      <h4 className="font-semibold text-sm text-gray-200">Résultat de la Génération BPMN</h4>
+                      {/* Button to toggle viewer was here, now removed */}
                     </div>
-                    {msg.showViewer && <BpmnViewer xml={msg.text} className="mb-2" />}
+                    {/* BpmnViewer component removed */}
                     <details className="max-h-64 overflow-y-auto">
-                      <summary className="cursor-pointer text-xs text-gray-400 hover:text-gray-200">Voir/Cacher XML</summary>
+                      <summary className="cursor-pointer text-xs text-gray-400 hover:text-gray-200">Voir/Cacher XML Généré</summary>
                       <pre className="mt-1 text-xs whitespace-pre-wrap font-mono bg-transparent p-0 m-0"><code className="language-xml">{msg.text}</code></pre>
                     </details>
                     {msg.validationResult && (
                       <div className={cn(
                         "mt-3 pt-3 border-t",
-                        msg.validationResult.isValid ? "border-green-500/30" : "border-red-500/30"
+                        msg.validationResult.isValid ? "border-green-700/50" : "border-red-700/50" // Darker borders for contrast
                       )}>
                         <h5 className={cn(
                           "text-sm font-semibold mb-1",
                           msg.validationResult.isValid ? "text-green-400" : "text-red-400"
                         )}>
-                          Résultat Validation: {msg.validationResult.isValid ? "Valide" : "Invalide"}
+                          Résultat Validation: {msg.validationResult.isValid ? 
+                            <span className="text-green-400">Valide</span> : 
+                            <span className="text-red-400">Invalide</span>
+                          }
                         </h5>
-                        {msg.validationResult.issues && msg.validationResult.issues.length > 0 && (
-                          <ul className="list-disc list-inside text-xs space-y-0.5">
+                        {msg.validationResult.summary && (
+                             <p className="text-xs text-gray-400 mb-1 italic">{msg.validationResult.summary}</p>
+                        )}
+                        {msg.validationResult.issues && msg.validationResult.issues.length > 0 ? (
+                          <ul className="list-disc list-inside text-xs space-y-0.5 text-gray-300">
                             {msg.validationResult.issues.map((issue, index) => (
-                              <li key={index}>{issue}</li>
+                              <li key={index} 
+                                className={cn(
+                                  issue.toLowerCase().includes("error:") ? "text-red-400" : 
+                                  issue.toLowerCase().includes("warning:") ? "text-yellow-400" : 
+                                  "text-gray-300" // Default for info or unspecified
+                                )}
+                              >
+                                {issue}
+                              </li>
                             ))}
                           </ul>
+                        ) : (
+                           msg.validationResult.isValid && <p className="text-xs text-green-400">Aucun problème spécifique signalé.</p>
                         )}
                       </div>
                     )}

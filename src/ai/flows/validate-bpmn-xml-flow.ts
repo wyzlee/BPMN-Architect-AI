@@ -12,30 +12,66 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { getValidationSystemPrompt } from '@/app/admin/validation-prompt/actions';
 
+// Schema for the input TO THE FLOW
 const ValidateBPMNXmlInputSchema = z.object({
   bpmnXml: z.string().describe('The BPMN 2.0 XML content to validate.'),
 });
 export type ValidateBPMNXmlInput = z.infer<typeof ValidateBPMNXmlInputSchema>;
 
+// Schema for the output OF THE FLOW (and the prompt)
 const ValidateBPMNXmlOutputSchema = z.object({
   isValid: z.boolean().describe('Whether the BPMN XML is valid according to BPMN 2.0 standards.'),
   issues: z.array(z.string()).describe('A list of issues or suggestions if the XML is not valid or could be improved. Empty if valid.'),
+  summary: z.string().optional().describe('A brief summary of the validation, including positive points and major concerns.'),
 });
 export type ValidateBPMNXmlOutput = z.infer<typeof ValidateBPMNXmlOutputSchema>;
 
-const PromptInputSchema = z.object({
-  systemPrompt: z.string().describe('The system prompt guiding the AI for BPMN XML validation.'),
-  bpmnXml: z.string().describe('The BPMN 2.0 XML content to validate.'),
+// Schema for the input TO THE PROMPT ITSELF.
+// The prompt template is stored in 'bpmn-validation-prompt.txt' and uses '{{{bpmnXml}}}'.
+const ActualPromptInputSchema = z.object({
+  bpmnXml: z.string().describe('The BPMN 2.0 XML content to be injected into the validation prompt template.'),
+  // We will also pass the guidelines themselves as part of the input to the prompt for clarity,
+  // even if the prompt template could be defined to include them statically.
+  // However, to keep the pattern of loading the main prompt text from a file and passing it,
+  // we will define the prompt template for ai.definePrompt more directly.
+});
+
+// This approach assumes that `getValidationSystemPrompt` returns the *template string*
+// that itself uses `{{{bpmnXml}}}`.
+// To use ai.definePrompt effectively, the prompt template string should be known at definition time.
+// Since getValidationSystemPrompt is async, we cannot use its result directly in a top-level ai.definePrompt.
+// We will load the template string inside the flow and then use a more generic prompt definition,
+// or define the prompt to take the template string as input.
+
+// Let's refine: the prompt template IS the content of bpmn-validation-prompt.txt.
+// This template string uses `{{{bpmnXml}}}`.
+// So, `ai.definePrompt` needs to be defined with this template.
+// This is problematic due to async loading of the template file for a top-level definition.
+
+// Adopting the pattern from generate-bpmn-xml.ts:
+// The main prompt text comes from a file (guidelines).
+// The dynamic data (bpmnXml) is injected into a static template string in `ai.definePrompt`.
+
+const PromptDefinitionInputSchema = z.object({
+  validationGuidelines: z.string().describe("The static content of the validation prompt file."),
+  bpmnXmlToValidate: z.string().describe("The actual BPMN XML to validate."),
 });
 
 const validationPrompt = ai.definePrompt({
   name: 'validateBPMNXmlPrompt',
-  input: { schema: PromptInputSchema },
+  input: { schema: PromptDefinitionInputSchema },
   output: { schema: ValidateBPMNXmlOutputSchema },
-  prompt: `{{{systemPrompt}}}`, // The actual XML will be part of the system prompt template
+  prompt: `{{{validationGuidelines}}}
+
+Please analyze and validate the following BPMN XML content based *only* on the guidelines provided above:
+\`\`\`xml
+{{{bpmnXmlToValidate}}}
+\`\`\`
+
+Ensure your response strictly follows the JSON format specified in the guidelines.
+`,
   config: {
-    temperature: 0.0, // Validation should be deterministic
-    // Adjust safety settings as needed; likely less restrictive for validation
+    temperature: 0.0, 
     safetySettings: [
         { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
         { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -48,23 +84,29 @@ const validationPrompt = ai.definePrompt({
 const validateBPMNXmlFlow = ai.defineFlow(
   {
     name: 'validateBPMNXmlFlow',
-    inputSchema: ValidateBPMNXmlInputSchema,
+    inputSchema: ValidateBPMNXmlInputSchema, // Flow takes { bpmnXml: string }
     outputSchema: ValidateBPMNXmlOutputSchema,
   },
-  async (flowInput) => {
-    const systemPromptContent = await getValidationSystemPrompt();
+  async (flowInput) => { // flowInput.bpmnXml is the XML string
+    const guidelines = await getValidationSystemPrompt(); // Reads 'bpmn-validation-prompt.txt'
 
-    // The prompt template expects the XML to be injected into it.
-    // The system prompt itself contains `{{{bpmnXml}}}`
     const { output } = await validationPrompt({
-      systemPrompt: systemPromptContent, // This prompt already contains the {{{bpmnXml}}} placeholder
-      bpmnXml: flowInput.bpmnXml, // Pass XML here to fill the placeholder
+      validationGuidelines: guidelines,
+      bpmnXmlToValidate: flowInput.bpmnXml,
     });
 
     if (!output) {
       console.error('AI did not produce validation output. BPMN XML:', flowInput.bpmnXml);
-      throw new Error("L'IA n'a pas réussi à générer le résultat de la validation.");
+      // Construct a valid output object indicating failure
+      return {
+        isValid: false,
+        issues: ["L'IA n'a pas réussi à générer le résultat de la validation. Le modèle n'a pas répondu."],
+        summary: "Échec de la validation par l'IA."
+      };
     }
+    // If the AI responds with a string that's not JSON, or malformed JSON for ValidateBPMNXmlOutputSchema
+    // Genkit might throw an error before this point, or output might be null/undefined.
+    // The schema definition on the prompt output should handle parsing.
     return output;
   }
 );
@@ -72,3 +114,4 @@ const validateBPMNXmlFlow = ai.defineFlow(
 export async function validateBPMNXml(input: ValidateBPMNXmlInput): Promise<ValidateBPMNXmlOutput> {
   return validateBPMNXmlFlow(input);
 }
+
