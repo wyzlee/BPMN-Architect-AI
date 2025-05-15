@@ -7,19 +7,26 @@ import { Button, type ButtonProps } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Send, Download, Loader2, CheckCircle, XCircle, Wand2, ListChecks, ShieldAlert, FileCheck2 } from 'lucide-react';
-import { getGeneratedAndValidatedBPMNXml, getRefinedInstructions, getCorrectedAndValidatedBPMNXml } from './actions';
+import { Send, Download, Loader2, CheckCircle, XCircle, Wand2, ListChecks, ShieldAlert, FileCheck2, Save } from 'lucide-react';
+import { 
+  getGeneratedAndValidatedBPMNXml, 
+  getRefinedInstructions, 
+  getCorrectedAndValidatedBPMNXml,
+  getAndValidateBPMNXml // Ensure this is imported if you re-enabled direct XML input
+} from './actions';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import type { ValidateBPMNXmlOutput } from '@/ai/flows/validate-bpmn-xml-flow';
 import { examplePrompts } from '@/lib/bpmn-examples';
+import { saveBpmnDiagram as saveDiagramToStorage } from '@/lib/bpmn-storage';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { getSelectedModelForPrompt } from '@/ai/config/models'; // Assuming this exists
 
 
 interface ActionButton {
@@ -78,9 +85,36 @@ export default function ChatInterface() {
     setInputValue(e.target.value);
   };
   
+  const handleSaveCurrentXML = (xmlContent: string, currentTitle?: string) => {
+    const title = window.prompt("Entrez un titre pour ce diagramme BPMN :", currentTitle || `Diagramme ${new Date().toLocaleDateString()}`);
+    if (title === null) return; // User cancelled
+    try {
+      saveDiagramToStorage(xmlContent, title);
+      toast({ title: "Sauvegarde Réussie", description: `Diagramme "${title}" sauvegardé localement.` });
+    } catch (error) {
+      console.error("Error saving BPMN to localStorage:", error);
+      toast({ title: "Erreur de Sauvegarde", description: (error instanceof Error ? error.message : "Impossible de sauvegarder le diagramme."), variant: "destructive" });
+    }
+  };
+  
   const generateActionButtonsForXml = (messageId: string, xmlContent: string, validation: ValidateBPMNXmlOutput | undefined): ActionButton[] => {
     const buttons: ActionButton[] = [
-      { id: `download-${messageId}`, label: 'Télécharger BPMN', onClick: () => handleDownloadSpecificXML(xmlContent), Icon: Download, variant: 'secondary', tooltip: 'Télécharger ce XML BPMN' },
+      { 
+        id: `download-${messageId}`, 
+        label: 'Télécharger BPMN', 
+        onClick: () => handleDownloadSpecificXML(xmlContent), 
+        Icon: Download, 
+        variant: 'default',
+        tooltip: 'Télécharger ce XML BPMN' 
+      },
+      { 
+        id: `save-${messageId}`, 
+        label: 'Sauvegarder Localement', 
+        onClick: () => handleSaveCurrentXML(xmlContent), 
+        Icon: Save, 
+        variant: 'secondary', 
+        tooltip: 'Sauvegarder ce diagramme BPMN dans votre navigateur' 
+      },
     ];
     if (validation && !validation.isValid && validation.issues && validation.issues.length > 0) {
       buttons.push({ 
@@ -96,7 +130,7 @@ export default function ChatInterface() {
   };
 
 
-  const processMessageForBPMN = useCallback(async (messageId: string, instructions: string) => {
+  const processMessageForBPMN = useCallback(async (messageId: string, instructions: string, promptType: 'generation' | 'refinement' | 'validation' | 'correction') => {
     setIsLoadingBpmn(true);
     setMessages(prev => prev.map(m => m.id === messageId ? { ...m, confirmationProcessed: true, actionButtons: undefined } : m));
 
@@ -106,10 +140,19 @@ export default function ChatInterface() {
       sender: 'ai',
     };
     setMessages(prev => [...prev, generatingMessage]);
+    
+    let selectedModel = 'googleai/gemini-1.5-flash-latest'; // Default model
+    try {
+        selectedModel = await getSelectedModelForPrompt(promptType);
+    } catch (error) {
+        console.error(`Error fetching model for prompt type ${promptType}:`, error);
+        toast({ title: "Erreur de configuration modèle", description: `Impossible de charger le modèle pour ${promptType}. Utilisation du modèle par défaut.`, variant: "destructive"});
+    }
+
 
     try {
-      const result = await getGeneratedAndValidatedBPMNXml(instructions);
-      setMessages(prev => prev.filter(m => m.id !== generatingMessage.id)); // Remove generating message
+      const result = await getGeneratedAndValidatedBPMNXml(instructions, selectedModel);
+      setMessages(prev => prev.filter(m => m.id !== generatingMessage.id)); 
 
       if (result.error) throw new Error(result.error);
 
@@ -133,7 +176,7 @@ export default function ChatInterface() {
         setMessages(prev => [...prev, noXmlMessage]);
       }
     } catch (error) {
-      setMessages(prev => prev.filter(m => m.id !== generatingMessage.id)); // Remove generating message
+      setMessages(prev => prev.filter(m => m.id !== generatingMessage.id)); 
       const errorMessage = error instanceof Error ? error.message : "Une erreur inconnue est survenue lors de la génération ou validation BPMN.";
       const newAIErrorMessage: Message = {
         id: Date.now().toString() + '-ai-error-bpmn',
@@ -159,8 +202,16 @@ export default function ChatInterface() {
     };
     setMessages(prev => [...prev, correctingMessage]);
 
+    let selectedModel = 'googleai/gemini-1.5-flash-latest'; // Default model
     try {
-      const result = await getCorrectedAndValidatedBPMNXml(originalXml, issues);
+        selectedModel = await getSelectedModelForPrompt('correction');
+    } catch (error) {
+        console.error("Error fetching model for correction prompt:", error);
+        toast({ title: "Erreur de configuration modèle", description: "Impossible de charger le modèle pour la correction. Utilisation du modèle par défaut.", variant: "destructive"});
+    }
+
+    try {
+      const result = await getCorrectedAndValidatedBPMNXml(originalXml, issues, selectedModel);
       setMessages(prev => prev.filter(m => m.id !== correctingMessage.id)); 
 
       if (result.error) throw new Error(result.error);
@@ -169,7 +220,7 @@ export default function ChatInterface() {
         const correctedXmlMessageId = Date.now().toString() + '-ai-corrected-xml';
         const newCorrectedMessage: Message = {
           id: correctedXmlMessageId,
-          text: result.correctedBpmnXml, // Display only XML for correction attempts for now
+          text: result.correctedBpmnXml, 
           sender: 'ai',
           isXML: true,
           validationResult: result.validation,
@@ -229,7 +280,7 @@ export default function ChatInterface() {
         confirmationProcessed: false,
         originalUserInput: messages.find(m => m.id === editingMessageId)?.originalUserInput || "N/A",
         actionButtons: [
-          { id: 'generate-' + newRefinedMessageId, label: 'Générer BPMN', onClick: () => processMessageForBPMN(newRefinedMessageId, editingRefinedText!), Icon: FileCheck2, variant: 'default', tooltip: "Générer le XML BPMN avec ces instructions" },
+          { id: 'generate-' + newRefinedMessageId, label: 'Générer BPMN', onClick: () => processMessageForBPMN(newRefinedMessageId, editingRefinedText!, 'generation'), Icon: FileCheck2, variant: 'default', tooltip: "Générer le XML BPMN avec ces instructions" },
           { id: 'edit-' + newRefinedMessageId, label: 'Modifier', onClick: () => handleEditInstructions(newRefinedMessageId, editingRefinedText!), Icon: Wand2, variant: 'outline', tooltip: "Modifier à nouveau ces instructions" },
           { id: 'cancel-' + newRefinedMessageId, label: 'Annuler', onClick: () => setMessages(prev => prev.map(m => m.id === newRefinedMessageId ? { ...m, confirmationProcessed: true, actionButtons: undefined, text: "Génération annulée pour ces instructions modifiées." } : m)), Icon: XCircle, variant: 'ghost', tooltip: "Annuler cette étape de génération" },
         ]
@@ -272,8 +323,16 @@ export default function ChatInterface() {
     };
     setMessages(prev => [...prev, refiningMessage]);
 
+    let selectedModel = 'googleai/gemini-1.5-flash-latest'; // Default model
     try {
-      const result = await getRefinedInstructions(rawUserInput);
+        selectedModel = await getSelectedModelForPrompt('refinement');
+    } catch (error) {
+        console.error("Error fetching model for refinement prompt:", error);
+        toast({ title: "Erreur de configuration modèle", description: "Impossible de charger le modèle pour le raffinement. Utilisation du modèle par défaut.", variant: "destructive"});
+    }
+
+    try {
+      const result = await getRefinedInstructions(rawUserInput, selectedModel);
       setMessages(prev => prev.filter(m => m.id !== refiningMessage.id)); 
 
       if (result.error) throw new Error(result.error);
@@ -290,7 +349,7 @@ export default function ChatInterface() {
           confirmationProcessed: false,
           originalUserInput: rawUserInput,
           actionButtons: [
-            { id: 'generate-' + refinedMessageId, label: 'Générer BPMN', onClick: () => processMessageForBPMN(refinedMessageId, result.refinedInstructions!), Icon: FileCheck2, variant: 'default', tooltip: "Générer le XML BPMN avec ces instructions" },
+            { id: 'generate-' + refinedMessageId, label: 'Générer BPMN', onClick: () => processMessageForBPMN(refinedMessageId, result.refinedInstructions!, 'generation'), Icon: FileCheck2, variant: 'default', tooltip: "Générer le XML BPMN avec ces instructions" },
             { id: 'edit-' + refinedMessageId, label: 'Modifier', onClick: () => handleEditInstructions(refinedMessageId, result.refinedInstructions!), Icon: Wand2, variant: 'outline', tooltip: "Modifier ces instructions avant génération" },
             { id: 'cancel-' + refinedMessageId, label: 'Annuler', onClick: () => setMessages(prev => prev.map(m => m.id === refinedMessageId ? { ...m, confirmationProcessed: true, actionButtons: undefined, text: "Génération annulée pour ces instructions." } : m)), Icon: XCircle, variant: 'ghost', tooltip: "Annuler cette étape de génération" },
           ]
@@ -448,7 +507,7 @@ export default function ChatInterface() {
               <div className="p-3 rounded-xl shadow bg-muted text-muted-foreground rounded-bl-none flex items-center">
                 <Loader2 className="h-5 w-5 animate-spin" />
                  <span className="ml-2 text-sm">
-                  {isLoadingRefinement ? "Raffinement en cours..." : isLoadingBpmn ? "Génération & Validation BPMN..." : "Tentative de correction..."}
+                  {isLoadingRefinement ? "Raffinement en cours..." : isLoadingBpmn ? "Génération &amp; Validation BPMN..." : "Tentative de correction..."}
                 </span>
               </div>
             </div>
@@ -506,4 +565,3 @@ export default function ChatInterface() {
     </div>
   );
 }
-

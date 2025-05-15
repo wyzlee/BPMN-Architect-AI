@@ -12,7 +12,7 @@ import {
   SidebarMenuButton,
 } from '@/components/ui/sidebar';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Workflow, MessageSquareText, Settings, FileEdit, ShieldCheck, Construction } from 'lucide-react'; 
+import { Workflow, MessageSquareText, Settings, FileEdit, ShieldCheck, Construction, Library, Settings2 } from 'lucide-react'; 
 import React from 'react';
 
 export default function AppSidebar() {
@@ -41,6 +41,22 @@ export default function AppSidebar() {
                 <SidebarMenuButton isActive={isLinkActive('/chat')} tooltip={{children: "Chat Génération XML"}}>
                   <MessageSquareText className="h-4 w-4 text-sidebar-primary" />
                   <span className="group-data-[collapsible=icon]:hidden">Chat Génération XML</span>
+                </SidebarMenuButton>
+              </Link>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <Link href="/saved-bpmn" legacyBehavior passHref>
+                <SidebarMenuButton isActive={isLinkActive('/saved-bpmn')} tooltip={{children: "BPMN Sauvegardés"}}>
+                  <Library className="h-4 w-4 text-sidebar-primary" />
+                  <span className="group-data-[collapsible=icon]:hidden">BPMN Sauvegardés</span>
+                </SidebarMenuButton>
+              </Link>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <Link href="/admin/llm-settings" legacyBehavior passHref>
+                <SidebarMenuButton isActive={isLinkActive('/admin/llm-settings')} tooltip={{children: "Configuration LLM"}}>
+                  <Settings2 className="h-4 w-4 text-sidebar-primary" />
+                  <span className="group-data-[collapsible=icon]:hidden">Configuration LLM</span>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
