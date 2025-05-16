@@ -30,9 +30,7 @@ const nextConfig = {
   experimental: {
     outputFileTracingRoot: path.join(__dirname, './'),
     outputFileTracingIncludes: {
-      'src/app/admin/**/actions.ts': ['./src/ai/prompts/**/*.txt'],
-      'src/components/chat/actions.ts': ['./src/ai/prompts/**/*.txt'],
-      'src/ai/flows/*.ts': ['./src/ai/prompts/**/*.txt'],
+      'src/**/*.(ts|tsx)': ['./src/ai/prompts/**/*.txt', './src/ai/**/*'],
     },
   },
 };
