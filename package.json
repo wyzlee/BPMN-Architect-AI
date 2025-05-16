@@ -8,7 +8,7 @@
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
     "build": "next build && npm run prepare-render",
     "prepare-render": "mkdir -p dist && cp -R .next/* dist/",
-    "start": "next start -p ${PORT:-3000}",
+    "start": "node server.js",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
   },
