@@ -95,6 +95,41 @@ export default {
   },
   plugins: [
     require("tailwindcss-animate"),
-    require('@tailwindcss/typography')
+    require('@tailwindcss/typography'),
+    // Plugin pour les dégradés
+    ({ addUtilities }: { addUtilities: (utilities: Record<string, Record<string, string>>, variants?: string[]) => void }) => {
+      const newUtilities = {
+        // Dégradés principaux
+        '.bg-teamwork-gradient': {
+          background: 'linear-gradient(135deg, #162049 0%, #0097DD 100%)',
+        },
+        '.bg-teamwork-gradient-reverse': {
+          background: 'linear-gradient(135deg, #0097DD 0%, #162049 100%)',
+        },
+        
+        // Dégradés pour les boutons et éléments d'interface
+        '.bg-accent-gradient': {
+          background: 'linear-gradient(135deg, #0097DD 0%, #02cd82 100%)',
+        },
+        '.bg-warning-gradient': {
+          background: 'linear-gradient(135deg, #ffce0a 0%, #f26151 100%)',
+        },
+        '.bg-success-gradient': {
+          background: 'linear-gradient(135deg, #02cd82 0%, #0097DD 100%)',
+        },
+        '.bg-danger-gradient': {
+          background: 'linear-gradient(135deg, #f26151 0%, #82053f 100%)',
+        },
+        
+        // Dégradés pour les éléments spéciaux
+        '.bg-sidebar-gradient': {
+          background: 'linear-gradient(180deg, #162049 0%, #1a2a5a 100%)',
+        },
+        '.bg-header-gradient': {
+          background: 'linear-gradient(90deg, #162049 0%, #0097DD 100%)',
+        },
+      };
+      addUtilities(newUtilities, ['responsive', 'hover']);
+    },
   ],
 } satisfies Config;

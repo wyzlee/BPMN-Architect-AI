@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { getSavedBpmnList, deleteBpmnDiagramById, type SavedBpmnDiagram, updateBpmnDiagramTitle } from '@/lib/bpmn-storage';
-import BpmnLocalViewer from '@/components/bpmn/bpmn-local-viewer';
+import BpmnViewer from '@/components/bpmn/BpmnViewerWrapper';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -71,7 +71,7 @@ export default function SavedBpmnPage() {
   };
 
   return (
-    <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-4rem)] sm:h-[calc(100vh-5rem)] md:h-[calc(100vh-6rem)]">
+    <div className="flex flex-col md:flex-row gap-4 p-4 min-h-[calc(100vh-4rem)] w-full max-w-full overflow-x-hidden">
       <aside className="w-full md:w-1/3 lg:w-1/4">
         <Card className="h-full flex flex-col">
           <CardHeader>
@@ -137,7 +137,7 @@ export default function SavedBpmnPage() {
         </Card>
       </aside>
 
-      <main className="flex-1 flex flex-col">
+      <main className="flex-1 flex flex-col h-full">
         {editingDiagram && (
           <Card className="mb-4">
             <CardHeader>
@@ -155,7 +155,7 @@ export default function SavedBpmnPage() {
             </CardContent>
           </Card>
         )}
-        <Card className="flex-grow flex flex-col">
+        <Card className="flex-grow flex flex-col h-full">
           <CardHeader className="flex-row justify-between items-center">
             <div>
               <CardTitle>{selectedDiagram ? `Prévisualisation : ${selectedDiagram.title}` : "Aucun diagramme sélectionné"}</CardTitle>
@@ -167,10 +167,10 @@ export default function SavedBpmnPage() {
               </Button>
             )}
           </CardHeader>
-          <CardContent className="flex-grow p-0 md:p-0 relative">
-            {/* The viewer needs specific height, often set on its container or itself */}
-            <div className="w-full h-full min-h-[300px] md:min-h-0">
-              <BpmnLocalViewer xml={selectedDiagram?.xml || null} className="w-full h-full" />
+          <CardContent className="flex-grow p-0 md:p-0 relative overflow-hidden">
+            {/* Le conteneur occupe toute la hauteur disponible */}
+            <div className="w-full h-full max-w-full overflow-hidden">
+              <BpmnViewer xml={selectedDiagram?.xml || null} className="w-full h-full" />
             </div>
           </CardContent>
         </Card>

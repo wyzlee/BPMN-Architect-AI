@@ -13,8 +13,9 @@ interface GuidePageProps {
   };
 }
 
-export default function GuidePage({ params }: GuidePageProps) {
-  const { slug } = params;
+export default async function GuidePage({ params }: GuidePageProps) {
+  // Utilisation de params comme promesse
+  const { slug } = await params;
   const section = guideContents[slug];
 
   if (!section) {
@@ -30,7 +31,8 @@ export default function GuidePage({ params }: GuidePageProps) {
 }
 
 export async function generateMetadata({ params }: GuidePageProps) {
-  const { slug } = params;
+  // Utilisation de params comme promesse
+  const { slug } = await params;
   const section = guideContents[slug];
 
   if (!section) {

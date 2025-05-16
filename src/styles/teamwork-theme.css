@@ -1,0 +1,179 @@
+/* Fichier de thème personnalisé pour la charte graphique TeamWork */
+
+/* Variables CSS pour le thème clair */
+:root {
+  /* Couleurs Primaires */
+  --color-primary: #162049; /* Bleu Foncé TeamWork */
+  --color-primary-light: #0097DD; /* Bleu Clair TeamWork */
+  
+  /* Couleurs Neutres */
+  --color-neutral-1: #282832;
+  --color-neutral-2: #444752;
+  --color-neutral-3: #747480;
+  --color-neutral-4: #9e9ea6;
+  --color-neutral-5: #d4d4d6;
+  --color-neutral-6: #f2f2f3;
+  --color-neutral-7: #fafafa;
+  
+  /* Couleurs Secondaires */
+  --color-secondary-green: #026060; /* Vert Foncé / Turquoise */
+  --color-secondary-purple: #7a45c4; /* Violet */
+  --color-secondary-burgundy: #82053f; /* Rose Foncé / Bordeaux */
+  
+  /* Couleurs Tertiaires */
+  --color-tertiary-teal: #457F7F; /* Turquoise Moyen */
+  --color-tertiary-lavender: #ba91f2; /* Violet Clair */
+  --color-tertiary-pink: #c2636e; /* Rose Désaturé */
+  
+  /* Couleurs RSE */
+  --color-rse-green: #02cd82; /* Vert (Environnement) */
+  --color-rse-salmon: #e05878; /* Saumon (Social) */
+  --color-rse-orange: #f26151; /* Orange (Sociétal) */
+  
+  /* Couleurs Marketing */
+  --color-marketing-yellow: #ffce0a; /* Jaune Vif */
+  --color-marketing-pink: #f52085; /* Rose Vif */
+  --color-marketing-cyan: #04cccc; /* Cyan Vif */
+}
+
+/* Variables HSL pour Tailwind */
+:root {
+  --background: 240 14% 97%; /* Neutre 7 #fafafa */
+  --foreground: 240 15% 18%; /* Neutre 1 #282832 */
+  
+  --card: 0 0% 100%; /* Blanc */
+  --card-foreground: 240 15% 18%; /* Neutre 1 */
+
+  --popover: 0 0% 100%; /* Blanc */
+  --popover-foreground: 240 15% 18%; /* Neutre 1 */
+
+  --primary: 220 52% 14%; /* Bleu Foncé TeamWork #162049 */
+  --primary-foreground: 0 0% 100%; /* Blanc pour le texte sur fond primaire */
+  
+  --secondary: 240 10% 96%; /* Neutre 6 #f2f2f3 */
+  --secondary-foreground: 240 15% 18%; /* Neutre 1 */
+  
+  --accent: 200 100% 43%; /* Bleu Clair TeamWork #0097DD */
+  --accent-foreground: 0 0% 100%; /* Blanc pour le texte sur l'accent */
+  
+  --muted: 240 10% 96%; /* Neutre 6 */
+  --muted-foreground: 240 5% 45%; /* Neutre 4 #9e9ea6 */
+  
+  --destructive: 0 84% 60%; /* Rouge vif pour les actions destructives */
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 240 6% 90%; /* Neutre 5 #d4d4d6 */
+  --input: 240 6% 90%; /* Neutre 5 */
+  --ring: 200 100% 43%; /* Couleur d'accent pour les anneaux et focus */
+
+  --radius: 0.5rem;
+
+  /* Thème de la barre latérale */
+  --sidebar-background: 220 52% 14%; /* Bleu Foncé TeamWork */
+  --sidebar-foreground: 0 0% 100%; /* Blanc */
+  --sidebar-primary: 200 100% 43%; /* Bleu Clair TeamWork */
+  --sidebar-primary-foreground: 0 0% 100%; /* Blanc */
+  --sidebar-accent: 220 45% 20%; /* Bleu un peu plus clair pour le survol */
+  --sidebar-accent-foreground: 0 0% 100%; /* Blanc */
+  --sidebar-border: 220 45% 20%; /* Bordure légèrement plus claire */
+  --sidebar-ring: 200 100% 43%; /* Couleur d'accent */
+  
+  /* Couleurs pour les graphiques */
+  --chart-1: 180 98% 19%; /* Vert Foncé / Turquoise #026060 */
+  --chart-2: 266 58% 52%; /* Violet #7a45c4 */
+  --chart-3: 337 93% 26%; /* Rose Foncé / Bordeaux #82053f */
+  --chart-4: 180 30% 38%; /* Turquoise Moyen #457F7F */
+  --chart-5: 266 77% 76%; /* Violet Clair #ba91f2 */
+}
+
+/* Thème sombre */
+.dark {
+  /* Thème sombre basé sur la charte TeamWork */
+  --background: 240 15% 8%; /* Fond très foncé */
+  --foreground: 0 0% 95%; /* Texte clair */
+  
+  --card: 240 15% 10%; /* Carte légèrement plus claire que le fond */
+  --card-foreground: 0 0% 95%; /* Texte clair sur carte */
+  
+  --popover: 240 15% 10%; /* Popover comme les cartes */
+  --popover-foreground: 0 0% 95%;
+  
+  --primary: 220 52% 60%; /* Bleu Foncé plus clair pour le thème sombre */
+  --primary-foreground: 0 0% 100%; /* Texte blanc sur primaire */
+  
+  --secondary: 240 15% 15%; /* Secondaire plus clair que le fond */
+  --secondary-foreground: 0 0% 95%;
+  
+  --muted: 240 10% 20%; /* Muted plus clair que le fond */
+  --muted-foreground: 240 5% 65%; /* Texte plus clair pour le contenu muet */
+  
+  --accent: 200 100% 60%; /* Bleu Clair plus vif pour le thème sombre */
+  --accent-foreground: 0 0% 100%;
+  
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  
+  --border: 240 15% 25%; /* Bordure plus visible */
+  --input: 240 15% 20%; /* Champs de formulaire */
+  --ring: 200 100% 60%; /* Anneau de focus plus visible */
+
+  /* Thème de la barre latérale en mode sombre */
+  --sidebar-background: 220 52% 8%; /* Bleu très foncé */
+  --sidebar-foreground: 0 0% 90%; /* Texte légèrement plus clair */
+  --sidebar-primary: 200 100% 60%; /* Bleu Clair plus vif */
+  --sidebar-primary-foreground: 0 0% 100%; /* Texte blanc */
+  --sidebar-accent: 220 30% 15%; /* Fond d'accent plus clair */
+  --sidebar-accent-foreground: 0 0% 100%; /* Texte blanc */
+  --sidebar-border: 220 30% 20%; /* Bordure légèrement plus claire */
+  --sidebar-ring: 200 100% 60%; /* Anneau de focus */
+}
+
+/* Classes utilitaires pour les couleurs TeamWork */
+.text-teamwork-primary { color: var(--color-primary); }
+.text-teamwork-primary-light { color: var(--color-primary-light); }
+.text-teamwork-neutral-1 { color: var(--color-neutral-1); }
+.text-teamwork-neutral-2 { color: var(--color-neutral-2); }
+.text-teamwork-neutral-3 { color: var(--color-neutral-3); }
+.text-teamwork-neutral-4 { color: var(--color-neutral-4); }
+.text-teamwork-neutral-5 { color: var(--color-neutral-5); }
+.text-teamwork-neutral-6 { color: var(--color-neutral-6); }
+.text-teamwork-neutral-7 { color: var(--color-neutral-7); }
+
+.bg-teamwork-primary { background-color: var(--color-primary); }
+.bg-teamwork-primary-light { background-color: var(--color-primary-light); }
+.bg-teamwork-neutral-1 { background-color: var(--color-neutral-1); }
+.bg-teamwork-neutral-2 { background-color: var(--color-neutral-2); }
+.bg-teamwork-neutral-3 { background-color: var(--color-neutral-3); }
+.bg-teamwork-neutral-4 { background-color: var(--color-neutral-4); }
+.bg-teamwork-neutral-5 { background-color: var(--color-neutral-5); }
+.bg-teamwork-neutral-6 { background-color: var(--color-neutral-6); }
+.bg-teamwork-neutral-7 { background-color: var(--color-neutral-7); }
+
+/* Dégradés TeamWork */
+.bg-teamwork-gradient {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+}
+
+.bg-teamwork-gradient-reverse {
+  background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-primary) 100%);
+}
+
+/* Styles personnalisés pour les scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--background) / 0.5);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.5);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.7);
+}

@@ -15,7 +15,7 @@ export default async function CorrectionSystemPromptAdminPage() {
   const currentPrompt = await getCorrectionSystemPrompt();
 
   return (
-    <React.Fragment>
+    <>
       <div className="max-w-4xl mx-auto">
         <header className="mb-8">
           <h1 className="text-3xl font-bold text-primary border-b pb-3">
@@ -23,11 +23,11 @@ export default async function CorrectionSystemPromptAdminPage() {
           </h1>
           <p className="text-muted-foreground mt-2">
             Modifiez ici le prompt système qui guide l'IA pour analyser un XML BPMN existant et une liste de problèmes de validation, puis générer un XML corrigé.
-            Le prompt doit utiliser les variables `{{{originalBpmnXml}}}` et `{{{validationIssues}}}`.
+            Le prompt doit utiliser les variables `{'{{originalBpmnXml}}'}` et `{'{{validationIssues}}'}`.
           </p>
         </header>
         <PromptEditorForm initialPrompt={currentPrompt} saveAction={saveCorrectionSystemPrompt} />
       </div>
-    </React.Fragment>
+    </>
   );
 }

@@ -2,6 +2,7 @@
 "use client";
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   Sidebar,
@@ -12,7 +13,7 @@ import {
   SidebarMenuButton,
 } from '@/components/ui/sidebar';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Workflow, MessageSquareText, Settings, FileEdit, ShieldCheck, Construction, Library, Settings2 } from 'lucide-react'; 
+import { MessageSquareText, Settings, FileEdit, ShieldCheck, Construction, Library, Settings2 } from 'lucide-react'; 
 import React from 'react';
 
 export default function AppSidebar() {
@@ -27,7 +28,15 @@ export default function AppSidebar() {
     <Sidebar className="border-r" collapsible="icon" side="left">
       <SidebarHeader className="p-4 border-b border-sidebar-border">
         <Link href="/" className="flex items-center gap-2">
-          <Workflow className="h-7 w-7 text-sidebar-primary" />
+          <div className="relative h-8 w-8 flex-shrink-0">
+            <Image 
+              src="/LOGO-TOMORROW_Carré.png" 
+              alt="TeamWork Logo" 
+              width={32} 
+              height={32} 
+              className="object-contain"
+            />
+          </div>
           <h2 className="text-xl font-semibold text-sidebar-foreground group-data-[collapsible=icon]:hidden">
             BPMN AI
           </h2>

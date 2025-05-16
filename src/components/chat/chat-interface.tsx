@@ -112,7 +112,7 @@ export default function ChatInterface() {
         label: 'Sauvegarder Localement', 
         onClick: () => handleSaveCurrentXML(xmlContent), 
         Icon: Save, 
-        variant: 'secondary', 
+        variant: 'default', 
         tooltip: 'Sauvegarder ce diagramme BPMN dans votre navigateur' 
       },
     ];
@@ -373,7 +373,7 @@ export default function ChatInterface() {
   const currentLoading = isLoadingRefinement || isLoadingBpmn || isLoadingCorrection;
 
   return (
-    <div className="flex flex-col flex-grow bg-card border rounded-lg shadow-sm overflow-hidden">
+    <div className="flex flex-col flex-grow h-full bg-card border rounded-lg shadow-sm overflow-hidden">
       <ScrollArea className="flex-grow p-4" ref={scrollAreaRef}>
         <div className="space-y-4">
           {messages.map((msg) => (
