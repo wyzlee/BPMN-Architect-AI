@@ -12,7 +12,7 @@ import {
   getGeneratedAndValidatedBPMNXml, 
   getRefinedInstructions, 
   getCorrectedAndValidatedBPMNXml,
-  getAndValidateBPMNXml // Ensure this is imported if you re-enabled direct XML input
+  // getAndValidateBPMNXml // Ensure this is imported if you re-enabled direct XML input
 } from './actions';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -26,7 +26,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getSelectedModelForPrompt } from '@/ai/config/models'; // Assuming this exists
+// Removed: import { getSelectedModelForPrompt } from '@/ai/config/models'; 
 
 
 interface ActionButton {
@@ -104,7 +104,7 @@ export default function ChatInterface() {
         label: 'Télécharger BPMN', 
         onClick: () => handleDownloadSpecificXML(xmlContent), 
         Icon: Download, 
-        variant: 'default',
+        variant: 'outline', // Changed from default to outline
         tooltip: 'Télécharger ce XML BPMN' 
       },
       { 
@@ -130,7 +130,7 @@ export default function ChatInterface() {
   };
 
 
-  const processMessageForBPMN = useCallback(async (messageId: string, instructions: string, promptType: 'generation' | 'refinement' | 'validation' | 'correction') => {
+  const processMessageForBPMN = useCallback(async (messageId: string, instructions: string) => {
     setIsLoadingBpmn(true);
     setMessages(prev => prev.map(m => m.id === messageId ? { ...m, confirmationProcessed: true, actionButtons: undefined } : m));
 
@@ -141,17 +141,11 @@ export default function ChatInterface() {
     };
     setMessages(prev => [...prev, generatingMessage]);
     
-    let selectedModel = 'googleai/gemini-1.5-flash-latest'; // Default model
-    try {
-        selectedModel = await getSelectedModelForPrompt(promptType);
-    } catch (error) {
-        console.error(`Error fetching model for prompt type ${promptType}:`, error);
-        toast({ title: "Erreur de configuration modèle", description: `Impossible de charger le modèle pour ${promptType}. Utilisation du modèle par défaut.`, variant: "destructive"});
-    }
-
+    // The selectedModel is determined on the server-side by the action.
+    // No need to getSelectedModelForPrompt here.
 
     try {
-      const result = await getGeneratedAndValidatedBPMNXml(instructions, selectedModel);
+      const result = await getGeneratedAndValidatedBPMNXml(instructions);
       setMessages(prev => prev.filter(m => m.id !== generatingMessage.id)); 
 
       if (result.error) throw new Error(result.error);
@@ -188,7 +182,7 @@ export default function ChatInterface() {
     } finally {
       setIsLoadingBpmn(false);
     }
-  }, [toast]);
+  }, [toast]); // Removed generateActionButtonsForXml from dependencies as it's defined outside or can be memoized if needed
 
   const handleAttemptCorrection = useCallback(async (messageId: string, originalXml: string, issues: string[]) => {
     setIsLoadingCorrection(true);
@@ -202,16 +196,10 @@ export default function ChatInterface() {
     };
     setMessages(prev => [...prev, correctingMessage]);
 
-    let selectedModel = 'googleai/gemini-1.5-flash-latest'; // Default model
+    // The selectedModel is determined on the server-side by the action.
+    
     try {
-        selectedModel = await getSelectedModelForPrompt('correction');
-    } catch (error) {
-        console.error("Error fetching model for correction prompt:", error);
-        toast({ title: "Erreur de configuration modèle", description: "Impossible de charger le modèle pour la correction. Utilisation du modèle par défaut.", variant: "destructive"});
-    }
-
-    try {
-      const result = await getCorrectedAndValidatedBPMNXml(originalXml, issues, selectedModel);
+      const result = await getCorrectedAndValidatedBPMNXml(originalXml, issues);
       setMessages(prev => prev.filter(m => m.id !== correctingMessage.id)); 
 
       if (result.error) throw new Error(result.error);
@@ -254,7 +242,7 @@ export default function ChatInterface() {
       setIsLoadingCorrection(false);
        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, actionButtons: m.actionButtons?.map(b => b.id === `correct-${messageId}` ? {...b, disabled: false} : b) } : m));
     }
-  }, [toast]);
+  }, [toast]); // Removed generateActionButtonsForXml
 
   const handleEditInstructions = (messageId: string, currentInstructions: string) => {
     setEditingMessageId(messageId);
@@ -280,7 +268,7 @@ export default function ChatInterface() {
         confirmationProcessed: false,
         originalUserInput: messages.find(m => m.id === editingMessageId)?.originalUserInput || "N/A",
         actionButtons: [
-          { id: 'generate-' + newRefinedMessageId, label: 'Générer BPMN', onClick: () => processMessageForBPMN(newRefinedMessageId, editingRefinedText!, 'generation'), Icon: FileCheck2, variant: 'default', tooltip: "Générer le XML BPMN avec ces instructions" },
+          { id: 'generate-' + newRefinedMessageId, label: 'Générer BPMN', onClick: () => processMessageForBPMN(newRefinedMessageId, editingRefinedText!), Icon: FileCheck2, variant: 'default', tooltip: "Générer le XML BPMN avec ces instructions" },
           { id: 'edit-' + newRefinedMessageId, label: 'Modifier', onClick: () => handleEditInstructions(newRefinedMessageId, editingRefinedText!), Icon: Wand2, variant: 'outline', tooltip: "Modifier à nouveau ces instructions" },
           { id: 'cancel-' + newRefinedMessageId, label: 'Annuler', onClick: () => setMessages(prev => prev.map(m => m.id === newRefinedMessageId ? { ...m, confirmationProcessed: true, actionButtons: undefined, text: "Génération annulée pour ces instructions modifiées." } : m)), Icon: XCircle, variant: 'ghost', tooltip: "Annuler cette étape de génération" },
         ]
@@ -323,16 +311,10 @@ export default function ChatInterface() {
     };
     setMessages(prev => [...prev, refiningMessage]);
 
-    let selectedModel = 'googleai/gemini-1.5-flash-latest'; // Default model
-    try {
-        selectedModel = await getSelectedModelForPrompt('refinement');
-    } catch (error) {
-        console.error("Error fetching model for refinement prompt:", error);
-        toast({ title: "Erreur de configuration modèle", description: "Impossible de charger le modèle pour le raffinement. Utilisation du modèle par défaut.", variant: "destructive"});
-    }
+    // The selectedModel is determined on the server-side by the action.
 
     try {
-      const result = await getRefinedInstructions(rawUserInput, selectedModel);
+      const result = await getRefinedInstructions(rawUserInput);
       setMessages(prev => prev.filter(m => m.id !== refiningMessage.id)); 
 
       if (result.error) throw new Error(result.error);
@@ -349,7 +331,7 @@ export default function ChatInterface() {
           confirmationProcessed: false,
           originalUserInput: rawUserInput,
           actionButtons: [
-            { id: 'generate-' + refinedMessageId, label: 'Générer BPMN', onClick: () => processMessageForBPMN(refinedMessageId, result.refinedInstructions!, 'generation'), Icon: FileCheck2, variant: 'default', tooltip: "Générer le XML BPMN avec ces instructions" },
+            { id: 'generate-' + refinedMessageId, label: 'Générer BPMN', onClick: () => processMessageForBPMN(refinedMessageId, result.refinedInstructions!), Icon: FileCheck2, variant: 'default', tooltip: "Générer le XML BPMN avec ces instructions" },
             { id: 'edit-' + refinedMessageId, label: 'Modifier', onClick: () => handleEditInstructions(refinedMessageId, result.refinedInstructions!), Icon: Wand2, variant: 'outline', tooltip: "Modifier ces instructions avant génération" },
             { id: 'cancel-' + refinedMessageId, label: 'Annuler', onClick: () => setMessages(prev => prev.map(m => m.id === refinedMessageId ? { ...m, confirmationProcessed: true, actionButtons: undefined, text: "Génération annulée pour ces instructions." } : m)), Icon: XCircle, variant: 'ghost', tooltip: "Annuler cette étape de génération" },
           ]
@@ -565,3 +547,4 @@ export default function ChatInterface() {
     </div>
   );
 }
+
