@@ -25,13 +25,13 @@ const nextConfig = {
   poweredByHeader: false,
   // Optimisations pour la production
   reactStrictMode: true,
-  swcMinify: true,
   // Inclure les fichiers de prompts dans le build standalone
+  outputFileTracingRoot: path.join(__dirname, './'),
+  outputFileTracingIncludes: {
+    'src/**/*.(ts|tsx)': ['./src/ai/prompts/**/*.txt', './src/ai/**/*'],
+  },
   experimental: {
-    outputFileTracingRoot: path.join(__dirname, './'),
-    outputFileTracingIncludes: {
-      'src/**/*.(ts|tsx)': ['./src/ai/prompts/**/*.txt', './src/ai/**/*'],
-    },
+    // Options expérimentales ici si nécessaire
   },
 };
 
