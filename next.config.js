@@ -24,6 +24,16 @@ const nextConfig = {
   // Optimisations pour la production
   reactStrictMode: true,
   swcMinify: true,
+  // Inclure les fichiers de prompts dans le build standalone
+  experimental: {
+    outputFileTracingIncludes: {
+      '/src/ai/prompts/*': ['./src/ai/prompts/**/*'],
+      '/admin/correction-prompt': ['./src/ai/prompts/bpmn-correction-prompt.txt'],
+      '/admin/refinement-prompt': ['./src/ai/prompts/bpmn-refinement-prompt.txt'],
+      '/admin/system-prompt': ['./src/ai/prompts/bpmn-generation-prompt.txt'],
+      '/admin/validation-prompt': ['./src/ai/prompts/bpmn-validation-prompt.txt'],
+    },
+  },
 };
 
 module.exports = nextConfig;
