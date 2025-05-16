@@ -17,8 +17,13 @@ const nextConfig = {
       },
     ],
   },
-  // Ajout de la configuration pour le déploiement sur Render
+  // Configuration pour le déploiement sur Render
   output: 'standalone',
+  // Assurez-vous que l'application fonctionne correctement derrière un proxy
+  poweredByHeader: false,
+  // Optimisations pour la production
+  reactStrictMode: true,
+  swcMinify: true,
 };
 
 module.exports = nextConfig;
