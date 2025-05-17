@@ -12,12 +12,14 @@ import {
   getGeneratedAndValidatedBPMNXml, 
   getRefinedInstructions, 
   getCorrectedAndValidatedBPMNXml,
+  getAvailableLlmList,
   // getAndValidateBPMNXml // Ensure this is imported if you re-enabled direct XML input
 } from './actions';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import type { ValidateBPMNXmlOutput } from '@/ai/flows/validate-bpmn-xml-flow';
+import type { AvailableModelInfo } from '@/ai/genkit';
 import { examplePrompts } from '@/lib/bpmn-examples';
 import { saveBpmnDiagram as saveDiagramToStorage } from '@/lib/bpmn-storage';
 import {
@@ -27,6 +29,15 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { ModelSelector } from '@/components/model-selector';
 import {
   Popover,
@@ -73,6 +84,11 @@ export default function ChatInterface() {
   const [isLoadingCorrection, setIsLoadingCorrection] = useState(false);
   const [editingRefinedText, setEditingRefinedText] = useState<string | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  
+  // États pour la gestion des modèles LLM
+  const [availableLlms, setAvailableLlms] = useState<AvailableModelInfo[]>([]);
+  const [selectedLlmId, setSelectedLlmId] = useState<string | undefined>(undefined);
+  const [isLoadingLlms, setIsLoadingLlms] = useState(true);
   const [selectedModelId, setSelectedModelId] = useState<string>('');
 
 
@@ -87,6 +103,28 @@ export default function ChatInterface() {
       }
     }
   }, [messages]);
+  
+  // Récupération des modèles LLM disponibles
+  useEffect(() => {
+    async function fetchModels() {
+      setIsLoadingLlms(true);
+      const result = await getAvailableLlmList();
+      if (result.error) {
+        toast({ title: "Erreur de chargement des modèles", description: result.error, variant: "destructive" });
+        setAvailableLlms([]);
+      } else {
+        setAvailableLlms(result.models);
+        // Définir un modèle par défaut si aucun n'est sélectionné et que la liste n'est pas vide
+        const defaultModel = result.models.find(m => m.status === 'available');
+        if (defaultModel && !selectedLlmId) {
+          setSelectedLlmId(defaultModel.id);
+          setSelectedModelId(defaultModel.id); // Synchroniser avec l'état existant
+        }
+      }
+      setIsLoadingLlms(false);
+    }
+    fetchModels();
+  }, [toast]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value);
@@ -150,7 +188,7 @@ export default function ChatInterface() {
     
     try {
       // Pass the selected model ID to the server action
-      const result = await getGeneratedAndValidatedBPMNXml(instructions, selectedModelId);
+      const result = await getGeneratedAndValidatedBPMNXml(instructions, selectedLlmId);
       setMessages(prev => prev.filter(m => m.id !== generatingMessage.id)); 
 
       if (result.error) throw new Error(result.error);
@@ -203,7 +241,7 @@ export default function ChatInterface() {
     
     try {
       // Pass the selected model ID to the server action
-      const result = await getCorrectedAndValidatedBPMNXml(originalXml, issues, selectedModelId);
+      const result = await getCorrectedAndValidatedBPMNXml(originalXml, issues, selectedLlmId);
       setMessages(prev => prev.filter(m => m.id !== correctingMessage.id)); 
 
       if (result.error) throw new Error(result.error);
@@ -317,7 +355,7 @@ export default function ChatInterface() {
 
     try {
       // Pass the selected model ID to the server action
-      const result = await getRefinedInstructions(rawUserInput, selectedModelId);
+      const result = await getRefinedInstructions(rawUserInput, selectedLlmId);
       setMessages(prev => prev.filter(m => m.id !== refiningMessage.id)); 
 
       if (result.error) throw new Error(result.error);
@@ -520,28 +558,56 @@ export default function ChatInterface() {
         <div className="flex flex-col space-y-2">
           {/* Model Selector */}
           <div className="flex items-center justify-between">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="flex items-center space-x-1">
-                  <Settings className="h-4 w-4" />
-                  <span>Modèle IA</span>
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80" align="start">
-                <div className="space-y-2">
-                  <h4 className="font-medium">Sélectionner un modèle d'IA</h4>
-                  <p className="text-sm text-muted-foreground">Choisissez le modèle d'IA à utiliser pour la génération de BPMN</p>
-                  <ModelSelector 
-                    onModelChange={setSelectedModelId} 
-                    defaultModelId={selectedModelId} 
-                  />
-                </div>
-              </PopoverContent>
-            </Popover>
+            <div className="w-[280px] sm:w-auto">
+              {isLoadingLlms ? (
+                <p className="text-xs text-muted-foreground">Chargement des modèles...</p>
+              ) : availableLlms.length > 0 ? (
+                <Select
+                  value={selectedLlmId}
+                  onValueChange={(value) => {
+                    setSelectedLlmId(value);
+                    setSelectedModelId(value); // Synchroniser avec l'état existant
+                  }}
+                  disabled={currentLoading || isLoadingLlms}
+                >
+                  <SelectTrigger className="w-[280px] sm:w-auto text-xs sm:text-sm" aria-label="Sélectionner un modèle LLM">
+                    <SelectValue placeholder="Sélectionner un modèle..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {
+                      // Grouper par fournisseur
+                      Object.entries(
+                        availableLlms.reduce((acc, model) => {
+                          if (!acc[model.provider]) acc[model.provider] = [];
+                          acc[model.provider].push(model);
+                          return acc;
+                        }, {} as Record<string, AvailableModelInfo[]>)
+                      ).map(([provider, models]) => (
+                        <SelectGroup key={provider}>
+                          <SelectLabel>{provider}</SelectLabel>
+                          {models.map(model => (
+                            <SelectItem
+                              key={model.id}
+                              value={model.id}
+                              disabled={model.status !== 'available'}
+                              title={model.status !== 'available' ? `Non disponible (${model.status.replace('_', ' ')})` : model.name}
+                            >
+                              {model.name} {model.status !== 'available' && <span className="text-destructive/70 text-xs ml-2">({model.status === 'configured_no_key' ? 'Clé API manquante' : 'Non configuré'})</span>}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      ))
+                    }
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="text-xs text-destructive">Aucun modèle LLM n'est disponible.</p>
+              )}
+            </div>
             
-            {selectedModelId && (
+            {selectedLlmId && (
               <p className="text-xs text-muted-foreground">
-                Modèle actuel: <span className="font-mono">{selectedModelId.split('/')[1]}</span>
+                Modèle actuel: <span className="font-mono">{selectedLlmId.split('/')[1]}</span>
               </p>
             )}
           </div>

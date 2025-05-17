@@ -4,6 +4,7 @@ import { generateBPMNXml, type GenerateBPMNXmlInput, type GenerateBPMNXmlOutput 
 import { refineUserInput, type RefineUserInputInput, type RefineUserInputOutput } from '@/ai/flows/refine-user-input-flow';
 import { validateBPMNXml, type ValidateBPMNXmlInput, type ValidateBPMNXmlOutput } from '@/ai/flows/validate-bpmn-xml-flow';
 import { correctBpmnXml, type CorrectBpmnXmlInput, type CorrectBpmnXmlOutput } from '@/ai/flows/correct-bpmn-xml-flow';
+import { listAvailableModels, type AvailableModelInfo } from '@/ai/genkit';
 
 interface RefinementResult {
   refinedInstructions: string | null;
@@ -126,5 +127,20 @@ export async function getCorrectedAndValidatedBPMNXml(originalBpmnXml: string, v
       validation: { isValid: false, issues: [`La nouvelle validation après correction a échoué: ${errorMessage}.`] },
       error: null
     };
+  }
+}
+
+/**
+ * Retrieves the list of available LLM models from the backend
+ * @returns Object containing the list of models and optional error message
+ */
+export async function getAvailableLlmList(): Promise<{ models: AvailableModelInfo[]; error?: string }> {
+  try {
+    const models = await listAvailableModels();
+    return { models };
+  } catch (error) {
+    console.error("Error fetching available LLM list:", error);
+    const errorMessage = error instanceof Error ? error.message : "Une erreur inconnue est survenue.";
+    return { models: [], error: `Impossible de récupérer la liste des modèles : ${errorMessage}` };
   }
 }

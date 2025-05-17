@@ -1,55 +1,38 @@
 'use server';
 
-import { listAvailableModels } from '@/ai/genkit';
+import { listAvailableModels, type AvailableModelInfo } from '@/ai/genkit';
 
 export interface ModelInfo {
   id: string;
   provider: string;
   name: string;
   displayName: string;
+  description?: string;
+  status: 'available' | 'configured_no_key' | 'not_configured';
+  type?: string;
 }
 
 // Fallback models to use if no models are available from the API
 const fallbackModels: ModelInfo[] = [
   {
     id: 'googleai/gemini-2.0-flash',
-    provider: 'googleai',
+    provider: 'Google AI',
     name: 'gemini-2.0-flash',
-    displayName: 'Gemini 2.0 Flash'
+    displayName: 'Gemini 2.0 Flash',
+    status: 'configured_no_key',
+    description: 'Fast, efficient model for most tasks',
+    type: 'chat'
   },
   {
     id: 'openai/gpt-3.5-turbo',
-    provider: 'openai',
+    provider: 'OpenAI',
     name: 'gpt-3.5-turbo',
-    displayName: 'GPT-3.5 Turbo'
+    displayName: 'GPT-3.5 Turbo',
+    status: 'configured_no_key',
+    description: 'Efficient model with good performance',
+    type: 'chat'
   }
 ];
-
-/**
- * Format a model ID into a structured ModelInfo object
- */
-function formatModelInfo(id: string): ModelInfo {
-  // Model IDs are in the format 'provider/model-name'
-  const [provider, ...modelNameParts] = id.split('/');
-  const name = modelNameParts.join('/');
-  
-  // Create a more readable display name
-  let displayName = name;
-  if (name.includes('-')) {
-    // Convert kebab-case to Title Case
-    displayName = name
-      .split('-')
-      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(' ');
-  }
-  
-  return {
-    id,
-    provider,
-    name,
-    displayName
-  };
-}
 
 /**
  * Lists all available LLM models across all initialized providers
@@ -57,17 +40,25 @@ function formatModelInfo(id: string): ModelInfo {
  */
 export async function getAvailableModels(): Promise<ModelInfo[]> {
   try {
-    // Get raw model IDs from genkit
-    const modelIds = listAvailableModels();
+    // Get detailed model info from genkit
+    const models = await listAvailableModels();
     
     // If no models are available, return fallback models
-    if (!modelIds || modelIds.length === 0) {
+    if (!models || models.length === 0) {
       console.log('No models available from API, using fallback models');
       return fallbackModels;
     }
     
-    // Transform raw IDs into structured model info objects
-    return modelIds.map(formatModelInfo);
+    // Transform AvailableModelInfo to ModelInfo (they're compatible but we keep both interfaces for flexibility)
+    return models.map(model => ({
+      id: model.id,
+      provider: model.provider,
+      name: model.name,
+      displayName: model.name,
+      description: model.description,
+      status: model.status,
+      type: model.type
+    }));
   } catch (error) {
     console.error('Error listing available models:', error);
     // Return fallback models in case of error
@@ -76,11 +67,36 @@ export async function getAvailableModels(): Promise<ModelInfo[]> {
 }
 
 /**
+ * Get only available models (those with API keys configured)
+ * @returns Array of available model information objects
+ */
+export async function getOnlyAvailableModels(): Promise<ModelInfo[]> {
+  const models = await getAvailableModels();
+  return models.filter(model => model.status === 'available');
+}
+
+/**
  * Groups models by provider for better UI organization
  * @returns Object with provider names as keys and arrays of models as values
  */
 export async function getGroupedModels(): Promise<Record<string, ModelInfo[]>> {
   const models = await getAvailableModels();
+  
+  return models.reduce((grouped, model) => {
+    if (!grouped[model.provider]) {
+      grouped[model.provider] = [];
+    }
+    grouped[model.provider].push(model);
+    return grouped;
+  }, {} as Record<string, ModelInfo[]>);
+}
+
+/**
+ * Groups only available models by provider
+ * @returns Object with provider names as keys and arrays of available models as values
+ */
+export async function getGroupedAvailableModels(): Promise<Record<string, ModelInfo[]>> {
+  const models = await getOnlyAvailableModels();
   
   return models.reduce((grouped, model) => {
     if (!grouped[model.provider]) {
