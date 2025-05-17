@@ -20,6 +20,8 @@ const RefineUserInputInternalSchema = z.object({
 
 const RefineUserInputInputSchema = z.object({
   rawUserInput: z.string().describe('The raw user input describing the business process.'),
+  // Optional model ID for dynamic model selection
+  modelId: z.string().optional().describe('The ID of the model to use for refinement, in the format provider/model-name'),
 });
 export type RefineUserInputInput = z.infer<typeof RefineUserInputInputSchema>;
 
@@ -62,10 +64,24 @@ const refineUserInputFlow = ai.defineFlow(
   async (flowInput) => {
     const systemPromptContent = await getRefinementSystemPrompt();
 
-    const { output } = await refinementPrompt({
-      systemPrompt: systemPromptContent,
-      rawUserInput: flowInput.rawUserInput,
-    });
+    // Dynamic model selection based on the provided modelId
+    // Instead of trying to get a model instance, we'll pass the model ID directly
+    const promptOptions: { model?: string } = {};
+    
+    if (flowInput.modelId) {
+      console.log(`Using selected model for refinement: ${flowInput.modelId}`);
+      promptOptions.model = flowInput.modelId;
+    } else {
+      console.log('Using default model for refinement');
+    }
+
+    const { output } = await refinementPrompt(
+      {
+        systemPrompt: systemPromptContent,
+        rawUserInput: flowInput.rawUserInput,
+      },
+      promptOptions
+    );
 
     if (!output || !output.refinedInstructions) {
       console.error('AI did not produce refined instructions. Raw user input:', flowInput.rawUserInput);

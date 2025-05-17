@@ -23,6 +23,8 @@ const PromptInputSchema = z.object({
 const GenerateBPMNXmlInputSchema = z.object({
   // This 'userInput' will be the refined instructions from the previous AI step
   userInput: z.string().describe('The refined and detailed user input describing the business process for BPMN XML generation.'),
+  // Optional model ID for dynamic model selection
+  modelId: z.string().optional().describe('The ID of the model to use for generation, in the format provider/model-name'),
 });
 export type GenerateBPMNXmlInput = z.infer<typeof GenerateBPMNXmlInputSchema>;
 
@@ -63,12 +65,26 @@ const generateBPMNXmlFlow = ai.defineFlow(
     outputSchema: GenerateBPMNXmlOutputSchema,
   },
   async (flowInput) => { 
-    const systemPromptContent = await getSystemPrompt(); 
+    const systemPromptContent = await getSystemPrompt();
+    
+    // Dynamic model selection based on the provided modelId
+    // Instead of trying to get a model instance, we'll pass the model ID directly
+    const promptOptions: { model?: string } = {};
+    
+    if (flowInput.modelId) {
+      console.log(`Using selected model for generation: ${flowInput.modelId}`);
+      promptOptions.model = flowInput.modelId;
+    } else {
+      console.log('Using default model for generation');
+    }
 
-    const { output } = await bpmnPrompt({
-      systemPrompt: systemPromptContent,
-      refinedUserInput: flowInput.userInput, // This is now the refined input
-    });
+    const { output } = await bpmnPrompt(
+      {
+        systemPrompt: systemPromptContent,
+        refinedUserInput: flowInput.userInput, // This is now the refined input
+      },
+      promptOptions
+    );
 
     if (!output || !output.bpmnXml) {
       console.error('AI did not produce BPMN XML output. Refined user input:', flowInput.userInput);

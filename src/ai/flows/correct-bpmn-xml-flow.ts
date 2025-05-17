@@ -15,6 +15,8 @@ import { getCorrectionSystemPrompt } from '@/app/admin/correction-prompt/actions
 const CorrectBpmnXmlInputSchema = z.object({
   originalBpmnXml: z.string().describe('The original BPMN 2.0 XML content that has validation issues.'),
   validationIssues: z.array(z.string()).describe('A list of validation issues identified for the original XML.'),
+  // Optional model ID for dynamic model selection
+  modelId: z.string().optional().describe('The ID of the model to use for correction, in the format provider/model-name'),
 });
 export type CorrectBpmnXmlInput = z.infer<typeof CorrectBpmnXmlInputSchema>;
 
@@ -55,15 +57,29 @@ const correctBpmnXmlFlow = ai.defineFlow(
   async (flowInput) => {
     const systemPromptContentTemplate = await getCorrectionSystemPrompt();
     
+    // Dynamic model selection based on the provided modelId
+    // Instead of trying to get a model instance, we'll pass the model ID directly
+    const promptOptions: { model?: string } = {};
+    
+    if (flowInput.modelId) {
+      console.log(`Using selected model for correction: ${flowInput.modelId}`);
+      promptOptions.model = flowInput.modelId;
+    } else {
+      console.log('Using default model for correction');
+    }
+    
     // The system prompt template itself contains the placeholders for originalBpmnXml and validationIssues
     // So, we pass them along with the template to the prompt function.
     // The Handlebars templating for originalBpmnXml and validationIssues happens within the systemPromptContentTemplate.
 
-    const { output } = await correctionPrompt({
-      systemPrompt: systemPromptContentTemplate, // This now includes the template AND the data to fill it
-      originalBpmnXml: flowInput.originalBpmnXml,
-      validationIssues: flowInput.validationIssues,
-    });
+    const { output } = await correctionPrompt(
+      {
+        systemPrompt: systemPromptContentTemplate, // This now includes the template AND the data to fill it
+        originalBpmnXml: flowInput.originalBpmnXml,
+        validationIssues: flowInput.validationIssues,
+      },
+      promptOptions
+    );
 
     if (!output || !output.correctedBpmnXml) {
       console.error('AI did not produce corrected BPMN XML output. Original XML:', flowInput.originalBpmnXml, "Issues:", flowInput.validationIssues);

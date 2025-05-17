@@ -10,13 +10,13 @@ interface RefinementResult {
   error: string | null;
 }
 
-export async function getRefinedInstructions(rawUserInput: string): Promise<RefinementResult> {
+export async function getRefinedInstructions(rawUserInput: string, modelId?: string): Promise<RefinementResult> {
   if (!rawUserInput.trim()) {
     return { refinedInstructions: null, error: "L'entrée utilisateur brute ne peut pas être vide." };
   }
 
   try {
-    const input: RefineUserInputInput = { rawUserInput };
+    const input: RefineUserInputInput = { rawUserInput, modelId };
     const result: RefineUserInputOutput = await refineUserInput(input);
 
     if (result && result.refinedInstructions) {
@@ -39,7 +39,7 @@ interface GenerationResult {
   error: string | null;
 }
 
-export async function getGeneratedAndValidatedBPMNXml(refinedUserInput: string): Promise<GenerationResult> {
+export async function getGeneratedAndValidatedBPMNXml(refinedUserInput: string, modelId?: string): Promise<GenerationResult> {
   if (!refinedUserInput.trim()) {
     return { bpmnXml: null, error: "Les instructions raffinées pour l'IA ne peuvent pas être vides." };
   }
@@ -47,7 +47,7 @@ export async function getGeneratedAndValidatedBPMNXml(refinedUserInput: string):
   let generatedXml: string | null = null;
 
   try {
-    const generationInput: GenerateBPMNXmlInput = { userInput: refinedUserInput };
+    const generationInput: GenerateBPMNXmlInput = { userInput: refinedUserInput, modelId };
     const generationResult: GenerateBPMNXmlOutput = await generateBPMNXml(generationInput); 
 
     if (!generationResult || !generationResult.bpmnXml) {
@@ -63,7 +63,7 @@ export async function getGeneratedAndValidatedBPMNXml(refinedUserInput: string):
   }
 
   try {
-    const validationInput: ValidateBPMNXmlInput = { bpmnXml: generatedXml };
+    const validationInput: ValidateBPMNXmlInput = { bpmnXml: generatedXml, modelId };
     const validationResult: ValidateBPMNXmlOutput = await validateBPMNXml(validationInput);
     return { bpmnXml: generatedXml, validation: validationResult, error: null };
 
@@ -86,7 +86,7 @@ interface CorrectionResult {
   error: string | null;
 }
 
-export async function getCorrectedAndValidatedBPMNXml(originalBpmnXml: string, validationIssues: string[]): Promise<CorrectionResult> {
+export async function getCorrectedAndValidatedBPMNXml(originalBpmnXml: string, validationIssues: string[], modelId?: string): Promise<CorrectionResult> {
   if (!originalBpmnXml.trim()) {
     return { correctedBpmnXml: null, error: "Le XML BPMN original ne peut pas être vide pour la correction." };
   }
@@ -97,7 +97,7 @@ export async function getCorrectedAndValidatedBPMNXml(originalBpmnXml: string, v
   let correctedXml: string | null = null;
 
   try {
-    const correctionInput: CorrectBpmnXmlInput = { originalBpmnXml, validationIssues };
+    const correctionInput: CorrectBpmnXmlInput = { originalBpmnXml, validationIssues, modelId };
     const correctionOutput: CorrectBpmnXmlOutput = await correctBpmnXml(correctionInput);
 
     if (!correctionOutput || !correctionOutput.correctedBpmnXml) {
@@ -114,7 +114,7 @@ export async function getCorrectedAndValidatedBPMNXml(originalBpmnXml: string, v
 
   // Re-validate the corrected XML
   try {
-    const validationInput: ValidateBPMNXmlInput = { bpmnXml: correctedXml };
+    const validationInput: ValidateBPMNXmlInput = { bpmnXml: correctedXml, modelId };
     const validationResult: ValidateBPMNXmlOutput = await validateBPMNXml(validationInput);
     return { correctedBpmnXml: correctedXml, validation: validationResult, error: null };
 

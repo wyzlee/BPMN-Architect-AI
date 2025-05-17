@@ -15,6 +15,8 @@ import { getValidationSystemPrompt } from '@/app/admin/validation-prompt/actions
 // Schema for the input TO THE FLOW
 const ValidateBPMNXmlInputSchema = z.object({
   bpmnXml: z.string().describe('The BPMN 2.0 XML content to validate.'),
+  // Optional model ID for dynamic model selection
+  modelId: z.string().optional().describe('The ID of the model to use for validation, in the format provider/model-name'),
 });
 export type ValidateBPMNXmlInput = z.infer<typeof ValidateBPMNXmlInputSchema>;
 
@@ -84,16 +86,30 @@ Ensure your response strictly follows the JSON format specified in the guideline
 const validateBPMNXmlFlow = ai.defineFlow(
   {
     name: 'validateBPMNXmlFlow',
-    inputSchema: ValidateBPMNXmlInputSchema, // Flow takes { bpmnXml: string }
+    inputSchema: ValidateBPMNXmlInputSchema, // Flow takes { bpmnXml: string, modelId?: string }
     outputSchema: ValidateBPMNXmlOutputSchema,
   },
   async (flowInput) => { // flowInput.bpmnXml is the XML string
     const guidelines = await getValidationSystemPrompt(); // Reads 'bpmn-validation-prompt.txt'
 
-    const { output } = await validationPrompt({
-      validationGuidelines: guidelines,
-      bpmnXmlToValidate: flowInput.bpmnXml,
-    });
+    // Dynamic model selection based on the provided modelId
+    // Instead of trying to get a model instance, we'll pass the model ID directly
+    const promptOptions: { model?: string } = {};
+    
+    if (flowInput.modelId) {
+      console.log(`Using selected model for validation: ${flowInput.modelId}`);
+      promptOptions.model = flowInput.modelId;
+    } else {
+      console.log('Using default model for validation');
+    }
+
+    const { output } = await validationPrompt(
+      {
+        validationGuidelines: guidelines,
+        bpmnXmlToValidate: flowInput.bpmnXml,
+      },
+      promptOptions
+    );
 
     if (!output) {
       console.error('AI did not produce validation output. BPMN XML:', flowInput.bpmnXml);

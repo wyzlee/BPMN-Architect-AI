@@ -7,7 +7,7 @@ import { Button, type ButtonProps } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Send, Download, Loader2, CheckCircle, XCircle, Wand2, ListChecks, ShieldAlert, FileCheck2, Save } from 'lucide-react';
+import { Send, Download, Loader2, CheckCircle, XCircle, Wand2, ListChecks, ShieldAlert, FileCheck2, Save, Settings } from 'lucide-react';
 import { 
   getGeneratedAndValidatedBPMNXml, 
   getRefinedInstructions, 
@@ -25,8 +25,14 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-// Removed: import { getSelectedModelForPrompt } from '@/ai/config/models'; 
+import { ModelSelector } from '@/components/model-selector';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"; 
 
 
 interface ActionButton {
@@ -67,6 +73,7 @@ export default function ChatInterface() {
   const [isLoadingCorrection, setIsLoadingCorrection] = useState(false);
   const [editingRefinedText, setEditingRefinedText] = useState<string | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [selectedModelId, setSelectedModelId] = useState<string>('');
 
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -141,11 +148,9 @@ export default function ChatInterface() {
     };
     setMessages(prev => [...prev, generatingMessage]);
     
-    // The selectedModel is determined on the server-side by the action.
-    // No need to getSelectedModelForPrompt here.
-
     try {
-      const result = await getGeneratedAndValidatedBPMNXml(instructions);
+      // Pass the selected model ID to the server action
+      const result = await getGeneratedAndValidatedBPMNXml(instructions, selectedModelId);
       setMessages(prev => prev.filter(m => m.id !== generatingMessage.id)); 
 
       if (result.error) throw new Error(result.error);
@@ -195,11 +200,10 @@ export default function ChatInterface() {
       isCorrectionAttempt: true,
     };
     setMessages(prev => [...prev, correctingMessage]);
-
-    // The selectedModel is determined on the server-side by the action.
     
     try {
-      const result = await getCorrectedAndValidatedBPMNXml(originalXml, issues);
+      // Pass the selected model ID to the server action
+      const result = await getCorrectedAndValidatedBPMNXml(originalXml, issues, selectedModelId);
       setMessages(prev => prev.filter(m => m.id !== correctingMessage.id)); 
 
       if (result.error) throw new Error(result.error);
@@ -311,10 +315,9 @@ export default function ChatInterface() {
     };
     setMessages(prev => [...prev, refiningMessage]);
 
-    // The selectedModel is determined on the server-side by the action.
-
     try {
-      const result = await getRefinedInstructions(rawUserInput);
+      // Pass the selected model ID to the server action
+      const result = await getRefinedInstructions(rawUserInput, selectedModelId);
       setMessages(prev => prev.filter(m => m.id !== refiningMessage.id)); 
 
       if (result.error) throw new Error(result.error);
@@ -514,34 +517,65 @@ export default function ChatInterface() {
       )}
 
       <form onSubmit={e => handleSendMessage(e)} className="p-4 border-t bg-background">
-        <div className="flex items-center space-x-2">
-          <Input
-            type="text"
-            placeholder="Décrivez votre processus..."
-            value={inputValue}
-            onChange={handleInputChange}
-            disabled={currentLoading || !!editingMessageId}
-            className="flex-grow text-base"
-            aria-label="Entrée utilisateur pour description du processus"
-          />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" disabled={currentLoading || !!editingMessageId} aria-label="Choisir un exemple">
-                <ListChecks className="h-5 w-5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {examplePrompts.map((ex) => (
-                <DropdownMenuItem key={ex.id} onClick={() => handleSendMessage(ex.prompt)}>
-                  {ex.title}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button type="submit" disabled={currentLoading || inputValue.trim() === '' || !!editingMessageId} aria-label="Envoyer message">
-            {currentLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
-            <span className="ml-2 hidden sm:inline">Envoyer</span>
-          </Button>
+        <div className="flex flex-col space-y-2">
+          {/* Model Selector */}
+          <div className="flex items-center justify-between">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="flex items-center space-x-1">
+                  <Settings className="h-4 w-4" />
+                  <span>Modèle IA</span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80" align="start">
+                <div className="space-y-2">
+                  <h4 className="font-medium">Sélectionner un modèle d'IA</h4>
+                  <p className="text-sm text-muted-foreground">Choisissez le modèle d'IA à utiliser pour la génération de BPMN</p>
+                  <ModelSelector 
+                    onModelChange={setSelectedModelId} 
+                    defaultModelId={selectedModelId} 
+                  />
+                </div>
+              </PopoverContent>
+            </Popover>
+            
+            {selectedModelId && (
+              <p className="text-xs text-muted-foreground">
+                Modèle actuel: <span className="font-mono">{selectedModelId.split('/')[1]}</span>
+              </p>
+            )}
+          </div>
+          
+          {/* Input and Send */}
+          <div className="flex items-center space-x-2">
+            <Input
+              type="text"
+              placeholder="Décrivez votre processus..."
+              value={inputValue}
+              onChange={handleInputChange}
+              disabled={currentLoading || !!editingMessageId}
+              className="flex-grow text-base"
+              aria-label="Entrée utilisateur pour description du processus"
+            />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" disabled={currentLoading || !!editingMessageId} aria-label="Choisir un exemple">
+                  <ListChecks className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {examplePrompts.map((ex) => (
+                  <DropdownMenuItem key={ex.id} onClick={() => handleSendMessage(ex.prompt)}>
+                    {ex.title}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button type="submit" disabled={currentLoading || inputValue.trim() === '' || !!editingMessageId} aria-label="Envoyer message">
+              {currentLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+              <span className="ml-2 hidden sm:inline">Envoyer</span>
+            </Button>
+          </div>
         </div>
       </form>
     </div>
